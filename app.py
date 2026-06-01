@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import os
+import json
 import traceback
 from datetime import datetime as dt
 from supabase import create_client, Client
@@ -8,7 +9,7 @@ app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-# 🎯 從環境變數讀取 Supabase 的連線資訊（純文字，絕對不會格式出錯）
+# 🎯 從環境變數讀取 Supabase 的連線資訊
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
@@ -20,9 +21,6 @@ try:
         raise Exception("Render 後台尚未設定 SUPABASE_URL 或 SUPABASE_KEY 環境變數！")
     
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    
-    # 🧼 自動化：幫老師在 Supabase 中建立需要的資料表（防呆機制）
-    # 這裡我們透過 RPC 或是直接測試連線，若沒有表會在讀寫時拋出，我們在 SQL 區塊手動建立最安全。
 except Exception as e:
     INIT_ERROR = f"🚨 Supabase 資料庫連線失敗，詳細日誌：\n{traceback.format_exc()}"
 
@@ -41,15 +39,6 @@ def internal_server_error(e):
         <a href="/" style="background:gray; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;">返回首頁</a>
     </div>
     """, 500
-
-@app.errorhandler(405)
-def method_not_allowed(e):
-    return """
-    <div style="font-family:sans-serif; padding:20px; border:3px solid orange; background:#fffbe6; border-radius:8px;">
-        <h2 style="color:orange; margin-top:0;">⚠️ 操作逾時或重置 (405)</h2>
-        <a href="/" style="background:#1890ff; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold;">返回登入首頁</a>
-    </div>
-    """, 405
 
 def get_deadline():
     try:
@@ -74,11 +63,6 @@ def login():
         session["role"] = "student"
         session["student_id"] = request.form.get("student_id")
         session["student_name"] = request.form.get("student_name")
-        
-        deadline_str = get_deadline()
-        if dt.now() > dt.strptime(deadline_str, "%Y-%m-%d %H:%M"):
-            return render_template("login.html", error="申請已經結束，下次請準時！")
-            
         return redirect(url_for("student_form"))
     return render_template("login.html")
 
@@ -88,22 +72,15 @@ def student_form():
     if session.get("role") != "student": return redirect(url_for("login"))
         
     if request.method == "POST":
-        deadline_str = get_deadline()
-        if dt.now() > dt.strptime(deadline_str, "%Y-%m-%d %H:%M"):
-            return jsonify({"status": "error", "message": "申請已經結束，下次請準時！"})
-
         form_data = request.form.to_dict()
         target_date = ""
         if form_data.get("leave_type") == "工讀":
             target_date = form_data.get("work_date")
-            if form_data.get("work_place") == "其他":
-                form_data["work_place"] = form_data.get("work_place_other", "其他外派")
         elif form_data.get("leave_type") == "省親":
             target_date = form_data.get("fam_start_date")
         elif form_data.get("leave_type") == "回國":
             target_date = form_data.get("go_date")
 
-        # 寫入 Supabase
         payload = {
             "student_id": session["student_id"],
             "student_name": session["student_name"],
@@ -114,7 +91,7 @@ def student_form():
         }
         
         supabase.table("applications").upsert(payload, on_conflict="student_id,target_date").execute()
-        return jsonify({"status": "success", "message": f"📥 {target_date} 的假單已安全存入雲端硬碟！"})
+        return jsonify({"status": "success", "message": f"📥 假單已安全存入雲端硬碟！"})
 
     return render_template("student.html", student_id=session.get("student_id"), student_name=session.get("student_name"))
 
@@ -128,10 +105,8 @@ def teacher_dashboard():
     
     apps = []
     for item in (res.data if res.data else []):
-        try:
-            full_data = json.loads(item["details"])
-        except:
-            full_data = {}
+        try: full_data = json.loads(item["details"])
+        except: full_data = {}
         full_data["student_id"] = item["student_id"]
         full_data["student_name"] = item["student_name"]
         full_data["leave_type"] = item["leave_type"]
@@ -140,25 +115,6 @@ def teacher_dashboard():
         apps.append(full_data)
         
     return render_template("teacher.html", applications=sorted(apps, key=lambda x: x.get("student_id", "")), settings={"deadline": deadline})
-
-@app.route("/teacher/save_settings", methods=["POST"])
-def save_settings():
-    new_dl = f"{request.form.get('deadline_date')} {request.form.get('deadline_time')}"
-    supabase.table("settings").upsert({"id": 1, "deadline": new_dl}).execute()
-    return redirect(url_for("teacher_dashboard"))
-
-@app.route("/teacher/update_status", methods=["POST"])
-def update_status():
-    sid = request.form.get("student_id")
-    tdate = request.form.get("target_date")
-    status = request.form.get("status")
-    
-    supabase.table("applications").update({"teacher_status": status}).eq("student_id", sid).eq("target_date", tdate).execute()
-    return jsonify({"status": "success"})
-
-@app.route("/teacher/confirm_week", methods=["POST"])
-def confirm_week():
-    return jsonify({"status": "success", "message": "🔒 本週假單已鎖定！"})
 
 @app.route("/logout")
 def logout():
