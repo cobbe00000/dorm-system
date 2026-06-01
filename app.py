@@ -9,12 +9,10 @@ app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-# ==================== 🛠️ 【請在下方填入你的 Google 金鑰】 🛠️ ====================
+# ==================== 🛠️ 【Google 金鑰與網址已校正】 🛠️ ====================
 
-# 🔑 1. 請把你在「所有服務帳戶」下載的 JSON 檔案內容，原封不動整段貼在下面引號內（保留大括號 {}）：
+# 🔑 1. 你的 Google JSON 密鑰（已安全包覆在三個引號內）
 FIREBASE_CONFIG_STR = """
-這裡請換成你下載的 JSON 內容
-"""
 {
   "type": "service_account",
   "project_id": "dorm-a0fe8",
@@ -28,11 +26,10 @@ FIREBASE_CONFIG_STR = """
   "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40dorm-a0fe8.iam.gserviceaccount.com",
   "universe_domain": "googleapis.com"
 }
+"""
 
-# 🔗 2. 請把你的 Firebase Realtime Database 網址貼在下方引號內：
+# 🔗 2. 你的 Firebase 資料庫網址（已修正多餘符號）
 FIREBASE_DB_URL = "https://dorm-135bf-default-rtdb.asia-southeast1.firebasedatabase.app"
-}
-"
 
 # ==============================================================================
 
@@ -134,9 +131,9 @@ def teacher_dashboard():
     
     apps_dict = db_data.get("applications", {})
     apps = list(apps_dict.values()) if apps_dict else []
-    apps = sorted(apps, key=lambda x: x.get("student_id", ""))
+    apps_sorted = sorted(apps, key=lambda x: x.get("student_id", ""))
     
-    return render_template("teacher.html", applications=apps, settings={"deadline": deadline})
+    return render_template("teacher.html", applications=apps_sorted, settings={"deadline": deadline})
 
 @app.route("/teacher/save_settings", methods=["POST"])
 def save_settings():
