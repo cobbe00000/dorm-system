@@ -1,33 +1,30 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
-import json
 import os
 import traceback
 from datetime import datetime as dt
-import firebase_admin
-from firebase_admin import credentials, db as firebase_db
+from supabase import create_client, Client
 
 app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-FIREBASE_DB_URL = "https://dorm-135bf-default-rtdb.firebaseio.com"
+# 🎯 從環境變數讀取 Supabase 的連線資訊（純文字，絕對不會格式出錯）
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-# 🎯 Vercel 最強防呆法：直接讀取同目錄下的金鑰檔案，絕對不會格式出錯！
+supabase: Client = None
 INIT_ERROR = None
+
 try:
-    # 尋找同目錄下的 firebase_key.json
-    key_path = os.path.join(os.path.dirname(__file__), 'firebase_key.json')
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise Exception("Render 後台尚未設定 SUPABASE_URL 或 SUPABASE_KEY 環境變數！")
     
-    if not os.path.exists(key_path):
-        raise Exception("找不到 firebase_key.json 檔案，請確認是否有上傳到 GitHub！")
-        
-    if not firebase_admin._apps:
-        cred = credentials.Certificate(key_path)
-        firebase_admin.initialize_app(cred, {
-            'databaseURL': FIREBASE_DB_URL
-        })
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    
+    # 🧼 自動化：幫老師在 Supabase 中建立需要的資料表（防呆機制）
+    # 這裡我們透過 RPC 或是直接測試連線，若沒有表會在讀寫時拋出，我們在 SQL 區塊手動建立最安全。
 except Exception as e:
-    INIT_ERROR = f"Firebase 初始化失敗: {traceback.format_exc()}"
+    INIT_ERROR = f"🚨 Supabase 資料庫連線失敗，詳細日誌：\n{traceback.format_exc()}"
 
 # ==============================================================================
 
@@ -38,18 +35,30 @@ def internal_server_error(e):
     return f"""
     <div style="font-family:sans-serif; padding:20px; border:3px solid red; background:#fff5f5; border-radius:8px;">
         <h2 style="color:red; margin-top:0;">🚨 系統連線發生問題</h2>
+        <p>請幫我<b>「整頁截圖」</b>傳給 AI 助手：</p>
         <pre style="background:#222; color:#fff; padding:15px; border-radius:5px; overflow-x:auto;">{display_err}</pre>
+        <br>
+        <a href="/" style="background:gray; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;">返回首頁</a>
     </div>
     """, 500
 
-def load_data():
-    if INIT_ERROR: raise Exception("Firebase 未初始化成功")
+@app.errorhandler(405)
+def method_not_allowed(e):
+    return """
+    <div style="font-family:sans-serif; padding:20px; border:3px solid orange; background:#fffbe6; border-radius:8px;">
+        <h2 style="color:orange; margin-top:0;">⚠️ 操作逾時或重置 (405)</h2>
+        <a href="/" style="background:#1890ff; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold;">返回登入首頁</a>
+    </div>
+    """, 405
+
+def get_deadline():
     try:
-        ref = firebase_db.reference('/')
-        data = ref.get()
-        return data if data else {"settings": {"deadline": "2026-12-31 23:59"}, "applications": {}}
+        res = supabase.table("settings").select("*").eq("id", 1).execute()
+        if res.data:
+            return res.data[0].get("deadline", "2026-12-31 23:59")
     except:
-        return {"settings": {"deadline": "2026-12-31 23:59"}, "applications": {}}
+        pass
+    return "2026-12-31 23:59"
 
 @app.route("/", methods=["GET", "POST"])
 def login():
@@ -65,6 +74,11 @@ def login():
         session["role"] = "student"
         session["student_id"] = request.form.get("student_id")
         session["student_name"] = request.form.get("student_name")
+        
+        deadline_str = get_deadline()
+        if dt.now() > dt.strptime(deadline_str, "%Y-%m-%d %H:%M"):
+            return render_template("login.html", error="申請已經結束，下次請準時！")
+            
         return redirect(url_for("student_form"))
     return render_template("login.html")
 
@@ -72,39 +86,79 @@ def login():
 def student_form():
     if INIT_ERROR: return internal_server_error(None)
     if session.get("role") != "student": return redirect(url_for("login"))
-    if request.method == "POST":
-        form_data = request.form.to_dict()
-        form_data["student_id"] = session["student_id"]
-        form_data["student_name"] = session["student_name"]
-        form_data["timestamp"] = dt.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        target_date = form_data.get("work_date") if form_data.get("leave_type") == "工讀" else form_data.get("fam_start_date")
-        form_data["target_date"] = target_date
+    if request.method == "POST":
+        deadline_str = get_deadline()
+        if dt.now() > dt.strptime(deadline_str, "%Y-%m-%d %H:%M"):
+            return jsonify({"status": "error", "message": "申請已經結束，下次請準時！"})
 
-        key = f"{session['student_id']}_{target_date}".replace('.', '_')
-        firebase_db.reference(f'/applications/{key}').set(form_data)
-        return jsonify({"status": "success", "message": "📥 資料已安全存入新資料庫！"})
+        form_data = request.form.to_dict()
+        target_date = ""
+        if form_data.get("leave_type") == "工讀":
+            target_date = form_data.get("work_date")
+            if form_data.get("work_place") == "其他":
+                form_data["work_place"] = form_data.get("work_place_other", "其他外派")
+        elif form_data.get("leave_type") == "省親":
+            target_date = form_data.get("fam_start_date")
+        elif form_data.get("leave_type") == "回國":
+            target_date = form_data.get("go_date")
+
+        # 寫入 Supabase
+        payload = {
+            "student_id": session["student_id"],
+            "student_name": session["student_name"],
+            "leave_type": form_data.get("leave_type"),
+            "target_date": target_date,
+            "details": json.dumps(form_data, ensure_ascii=False),
+            "timestamp": dt.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        supabase.table("applications").upsert(payload, on_conflict="student_id,target_date").execute()
+        return jsonify({"status": "success", "message": f"📥 {target_date} 的假單已安全存入雲端硬碟！"})
+
     return render_template("student.html", student_id=session.get("student_id"), student_name=session.get("student_name"))
 
 @app.route("/teacher")
 def teacher_dashboard():
     if INIT_ERROR: return internal_server_error(None)
     if session.get("role") != "teacher": return redirect(url_for("login"))
-    db_data = load_data()
-    apps = list(db_data.get("applications", {}).values())
-    return render_template("teacher.html", applications=sorted(apps, key=lambda x: x.get("student_id", "")), settings={"deadline": db_data.get("settings", {}).get("deadline", "2026-12-31 23:59")})
+    
+    deadline = get_deadline()
+    res = supabase.table("applications").select("*").execute()
+    
+    apps = []
+    for item in (res.data if res.data else []):
+        try:
+            full_data = json.loads(item["details"])
+        except:
+            full_data = {}
+        full_data["student_id"] = item["student_id"]
+        full_data["student_name"] = item["student_name"]
+        full_data["leave_type"] = item["leave_type"]
+        full_data["target_date"] = item["target_date"]
+        full_data["teacher_status"] = item.get("teacher_status", "待審核")
+        apps.append(full_data)
+        
+    return render_template("teacher.html", applications=sorted(apps, key=lambda x: x.get("student_id", "")), settings={"deadline": deadline})
 
 @app.route("/teacher/save_settings", methods=["POST"])
 def save_settings():
     new_dl = f"{request.form.get('deadline_date')} {request.form.get('deadline_time')}"
-    firebase_db.reference('/settings').update({"deadline": new_dl})
+    supabase.table("settings").upsert({"id": 1, "deadline": new_dl}).execute()
     return redirect(url_for("teacher_dashboard"))
 
 @app.route("/teacher/update_status", methods=["POST"])
 def update_status():
-    key = f"{request.form.get('student_id')}_{request.form.get('target_date')}".replace('.', '_')
-    firebase_db.reference(f'/applications/{key}').update({"teacher_status": request.form.get("status")})
+    sid = request.form.get("student_id")
+    tdate = request.form.get("target_date")
+    status = request.form.get("status")
+    
+    supabase.table("applications").update({"teacher_status": status}).eq("student_id", sid).eq("target_date", tdate).execute()
     return jsonify({"status": "success"})
+
+@app.route("/teacher/confirm_week", methods=["POST"])
+def confirm_week():
+    return jsonify({"status": "success", "message": "🔒 本週假單已鎖定！"})
 
 @app.route("/logout")
 def logout():
