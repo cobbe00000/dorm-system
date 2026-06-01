@@ -9,11 +9,9 @@ app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-# ==================== 🛠️ 【Google 金鑰與網址已校正】 🛠️ ====================
+# ==================== 🛠️ 【Google 金鑰格式完美校正版】 🛠️ ====================
 
-# 🔑 1. 你的 Google JSON 密鑰（已安全包覆在三個引號內）
-FIREBASE_CONFIG_STR = """
-{
+FIREBASE_CONFIG_STR = """{
   "type": "service_account",
   "project_id": "dorm-a0fe8",
   "private_key_id": "3e05bc307d8456566dd9a99c9f10419c360dd6d4",
@@ -25,10 +23,8 @@ FIREBASE_CONFIG_STR = """
   "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
   "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40dorm-a0fe8.iam.gserviceaccount.com",
   "universe_domain": "googleapis.com"
-}
-"""
+}"""
 
-# 🔗 2. 你的 Firebase 資料庫網址（已修正多餘符號）
 FIREBASE_DB_URL = "https://dorm-135bf-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 # ==============================================================================
@@ -112,7 +108,6 @@ def student_form():
 
         form_data["target_date"] = target_date
 
-        # 鎖定 Firebase 的儲存路徑 (學號_日期)
         key = f"{session['student_id']}_{target_date}".replace('.', '_')
         ref = firebase_db.reference(f'/applications/{key}')
         ref.set(form_data)
