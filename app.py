@@ -9,8 +9,9 @@ app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-# ==================== 🛠️ 【Google 金鑰格式完美校正版】 🛠️ ====================
+# ==================== 🛠️ 【Google 金鑰與網址 100% 正確版】 ====================
 
+# 🔑 1. Firebase 金鑰 (已清除所有重複與錯位程式碼)
 FIREBASE_CONFIG_STR = """{
   "type": "service_account",
   "project_id": "dorm-a0fe8",
@@ -25,7 +26,8 @@ FIREBASE_CONFIG_STR = """{
   "universe_domain": "googleapis.com"
 }"""
 
-FIREBASE_DB_URL = "https://dorm-135bf-default-rtdb.asia-southeast1.firebasedatabase.app"
+# 🔗 2. 資料庫網址 (已校正為與金鑰專案 dorm-a0fe8 完全一致)
+FIREBASE_DB_URL = "https://dorm-a0fe8-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 # ==============================================================================
 
