@@ -10,54 +10,35 @@ app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-# ==================== 🛠️ 【Google 金鑰與網址 強力排毒版】 ====================
-
-RAW_CONFIG = """{
-  "type": "service_account",
-  "project_id": "dorm-a0fe8",
-  "private_key_id": "3e05bc307d8456566dd9a99c9f10419c360dd6d4",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC2Sj6B21rIAeZQ\nJ+9xCHgT+Lrn9Jnfsc6V/8ChpAIutSJnBH5i9xMamhuJKaI3AucMW46we75cBTr+\naVdUbnOqQc10ZkAUmlGWfQL5zU7d9HIewBMZvANYah7tV9pDn26aJ9abaasJ3laP\n0VTTg6F//gtYxENNgJWYXA6I0vL06Jcmp46o60Z9ZCR2CEfNFDCk9jxa6iHGzw+/\nVOSSUAF8JgOJ/aH71TECKTTUDnp1KGJU/KHM2vkZONGVQ+jgxyNaQLhSAzdH42H+\ndYqwHcSgV8V14foNI5Uy4GygWyv2tqQad6HS68qkoHW5Aa03rbW3NFwP0XAzRQtV\n6JxbQZenAgMBAAECggEATvK9uqDlYs0L0fhRx8sKsl+dlzsE73BDEAzJgVgWR+NU\nCHjWQgdO400OEuwQoLGlnmEC3eVh7tmnEKtP0rXZa0n/cOOd6i5hmoL+6HBmMVOe\nnznBq/oVGtQvG8zaL0Jb9PC/DeUIWghMxhG7orWWGuhMQsARg/3mDCwGcXSnG7Dr\nBxnvK5L3B9SaJ6Y7XaTzt4zqE8jQH9BslMNmif5rH6nCKmyGklDh3LISn0eQktTT\nKILsv4i/TUq4DudQ9ZG0QzEh7dtzVFXns3ynvjQQS7TimAg/2uOvkL9vP5uRxGgs\n2IHfCclUpfZr5rGI74oEdqVTudjlA7Xt9s5nrshimQKBgQDhf5RXvp6cpkkNWl2r\nCH2nM5zATwlu8Jdz890sLofd1qPx/CmyzF0FZLQp3ztj2fxIHw4dyS4eDecf5gHg\nTBhAdM82RovRNUmw4z0cKpokq3BlwO+XfAt9STyYGl8d5Zu+fr2sqkrGoRy6bmCe\nJdyTMi8jVtojGM4WQF8zPsv1PwKBgQDO8njyDp+iweZy+N3NKYeJ++F0SJHbYvMn\nIM3dmZZC5dJJuYd+3oRSgpycul5e3GMt0fX0S9o3Hh192E0v6RyQFO5bXZIFp0ub\nT+YrPRhhbFl/RnPV/YYpQL58oAsGDakDGrdujGJF+VJ11AHvLA34XJ/uY2BE8u74\nr2qoyAm7mQKBgDjrumdXv7PtKZ2MRP6qWwV8usG0cb4mTyS+1wKTEErIJoQr0d7H\nRWfaHrw/FD/FQ7B03lxYbyK5AbGEns6ehrSmh7O8pQh/OgXDpqZYfqZo/CtDQ3dq\noX/Tn88JQR9L2T+BwKE4Lz3qZ1UMDal+ByrEzS9PeirH1SW6xA0sedGDAoGAOR6y\nBVXF+B1+5xML3XnuAEb2pqr1H1HDfXRPfi/LSrG2hkTgQkNW0JNeeN/z9kjsUxRV\nx9U76OS2DSsruuKj0J0GYU+FY2wWsUqvZBXb6eAHH9spU9JDOpW1Ph7KjCQvFz1D\njg7PfTLg8MbQtdw6Cug9+IWTZ9SJ4zg/v1BfZ1kCgYAQLWmknjUUFR3wVnv0r2gI\nIlezWBB+AY0Ht5DY8X24d3v4W5t4CJ7Y2HmGsCvJlKVrTtsT8Geg6gZqgdkvw1Tn\nmsDfWgcX63giai/U76t5EWR7UUwK5oxRa6gjGj7YtuVHeITEKpjD1LsB3QrOV0Ms\niDVvpKB4jE315ehTkLBqOw==\n-----END PRIVATE KEY-----\n",
-  "client_email": "firebase-adminsdk-fbsvc@dorm-a0fe8.iam.gserviceaccount.com",
-  "client_id": "104158881843458654051",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40dorm-a0fe8.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
-}"""
-
 FIREBASE_DB_URL = "https://dorm-a0fe8-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-# 🧼 核心修正：強制清洗隱形字元與空格排毒
+# 🛡️ 安全讀取系統環境變數中的金鑰
+INIT_ERROR = None
 try:
-    clean_config_str = RAW_CONFIG.strip().replace('\xa0', ' ')
-    config_dict = json.loads(clean_config_str)
+    config_env = os.environ.get("FIREBASE_CONFIG")
+    if not config_env:
+        raise Exception("Render 後台沒有設定 FIREBASE_CONFIG 環境變數！")
+    
+    config_dict = json.loads(config_env.strip())
     
     if not firebase_admin._apps:
         cred = credentials.Certificate(config_dict)
         firebase_admin.initialize_app(cred, {
             'databaseURL': FIREBASE_DB_URL
         })
-    INIT_ERROR = None
 except Exception as e:
-    INIT_ERROR = f"Firebase 初始化階段即失敗，錯誤訊息：{traceback.format_exc()}"
+    INIT_ERROR = f"Firebase 初始化失敗: {traceback.format_exc()}"
 
 # ==============================================================================
 
-# 🔥 防噴錯除錯器
 @app.errorhandler(500)
 def internal_server_error(e):
     err = traceback.format_exc()
-    # 如果一開始就初始化失敗，直接顯示初始化錯誤
-    if INIT_ERROR:
-        display_err = INIT_ERROR
-    else:
-        display_err = err
-        
+    display_err = INIT_ERROR if INIT_ERROR else err
     return f"""
     <div style="font-family:sans-serif; padding:20px; border:3px solid red; background:#fff5f5; border-radius:8px;">
-        <h2 style="color:red; margin-top:0;">🚨 發現系統內部衝突！</h2>
-        <p>老師別慌，請幫我<b>「整頁截圖」</b>傳給 AI 助手：</p>
+        <h2 style="color:red; margin-top:0;">🚨 系統連線發生問題</h2>
+        <p>請幫我<b>「整頁截圖」</b>傳給 AI 助手：</p>
         <pre style="background:#222; color:#fff; padding:15px; border-radius:5px; overflow-x:auto;">{display_err}</pre>
         <br>
         <a href="/" style="background:gray; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;">返回首頁</a>
@@ -68,8 +49,8 @@ def internal_server_error(e):
 def method_not_allowed(e):
     return """
     <div style="font-family:sans-serif; padding:20px; border:3px solid orange; background:#fffbe6; border-radius:8px;">
-        <h2 style="color:orange; margin-top:0;">⚠️ 瀏覽器抓取網頁方式錯誤 (405)</h2>
-        <p>請點擊下方按鈕，回到首頁重新正常登入操作即可！</p>
+        <h2 style="color:orange; margin-top:0;">⚠️ 操作逾時或重置 (405)</h2>
+        <p>請點擊下方按鈕重新登入操作即可！</p>
         <br>
         <a href="/" style="background:#1890ff; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold;">返回登入首頁</a>
     </div>
@@ -77,7 +58,7 @@ def method_not_allowed(e):
 
 def load_data():
     if INIT_ERROR:
-        raise Exception("由於 Firebase 初始化失敗，拒絕執行 load_data()")
+        raise Exception("Firebase 未初始化成功，無法讀取資料")
     try:
         ref = firebase_db.reference('/')
         data = ref.get()
@@ -89,14 +70,12 @@ def load_data():
             data["applications"] = {}
         return data
     except Exception as e:
-        print(f"讀取 Firebase 失敗: {e}")
         return {"settings": {"deadline": "2026-12-31 23:59"}, "applications": {}}
 
 @app.route("/", methods=["GET", "POST"])
 def login():
     if INIT_ERROR:
         return internal_server_error(None)
-        
     if request.method == "POST":
         role = request.form.get("role")
         if role == "teacher":
@@ -155,7 +134,7 @@ def student_form():
         ref = firebase_db.reference(f'/applications/{key}')
         ref.set(form_data)
         
-        return jsonify({"status": "success", "message": f"📥 {target_date} 的資料已同步安全存入 Firebase 永久資料庫！"})
+        return jsonify({"status": "success", "message": f"📥 資料已安全存入 Firebase 資料庫！"})
 
     return render_template("student.html", student_id=session.get("student_id"), student_name=session.get("student_name"))
 
@@ -180,10 +159,8 @@ def save_settings():
     if INIT_ERROR or session.get("role") != "teacher":
         return jsonify({"status": "error"})
     new_dl = f"{request.form.get('deadline_date')} {request.form.get('deadline_time')}"
-    
     ref = firebase_db.reference('/settings')
     ref.update({"deadline": new_dl})
-    
     return redirect(url_for("teacher_dashboard"))
 
 @app.route("/teacher/update_status", methods=["POST"])
@@ -198,7 +175,6 @@ def update_status():
     ref = firebase_db.reference(f'/applications/{key}')
     if ref.get():
         ref.update({"teacher_status": status})
-        
     return jsonify({"status": "success"})
 
 @app.route("/teacher/confirm_week", methods=["POST"])
