@@ -12,15 +12,29 @@ TEACHER_PWD = "0800092000"
 
 FIREBASE_DB_URL = "https://dorm-a0fe8-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-# 🛡️ 安全讀取系統環境變數中的金鑰
+# 🛡️ 安全讀取系統環境變數 + 換行符號自動校正
 INIT_ERROR = None
 try:
     config_env = os.environ.get("FIREBASE_CONFIG")
     if not config_env:
         raise Exception("Render 後台沒有設定 FIREBASE_CONFIG 環境變數！")
     
-    config_dict = json.loads(config_env.strip())
+    # 🧼 清洗多餘空白並自動修復 Render 環境中常壞掉的換行符號 \\n
+    clean_config = config_env.strip()
+    if '\\n' in clean_config and '\\\\n' not in clean_config:
+        # 如果換行符號被多加了斜線，嘗試修正它
+        clean_config = clean_config.replace('\\n', '\n')
+        
+    try:
+        config_dict = json.loads(clean_config)
+    except json.JSONDecodeError:
+        # 如果上面修正失敗，嘗試用另一種標準方式解析
+        config_dict = json.loads(config_env.strip().replace('\n', '\\n').replace('\\\\\\n', '\\n'))
     
+    # 如果 private_key 的內部換行又被破壞，進行二次清洗
+    if "private_key" in config_dict:
+        config_dict["private_key"] = config_dict["private_key"].replace('\\n', '\n')
+
     if not firebase_admin._apps:
         cred = credentials.Certificate(config_dict)
         firebase_admin.initialize_app(cred, {
