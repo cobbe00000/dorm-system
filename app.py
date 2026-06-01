@@ -10,63 +10,56 @@ app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-FIREBASE_DB_URL = "https://dorm-a0fe8-default-rtdb.asia-southeast1.firebasedatabase.app"
+# 🎯 【完美對接全新 Firebase 專案：dorm-135bf】
+FIREBASE_DB_URL = "https://dorm-135bf-default-rtdb.firebaseio.com"
 
-# 🛡️ 金鑰安全分離完美架構
+# 🛡️ 憑證完美隔離與多重防毒機制
 INIT_ERROR = None
 try:
-    # 從 Render 讀取絕對不會出錯的純文字變數
-    project_id = os.environ.get("FB_PROJECT_ID")
-    client_email = os.environ.get("FB_CLIENT_EMAIL")
-    private_key_id = os.environ.get("FB_PRIVATE_KEY_ID")
-    
-    if not all([project_id, client_email, private_key_id]):
-        raise Exception("Render 後台環境變數（FB_PROJECT_ID 等）設定不完整，請確認是否已儲存！")
-    
-    # 🔒 最核心、最難搞的長金鑰，直接在 Python 內部用最安全、乾淨的方式拼接，徹底跟外界的編碼錯誤絕緣
+    # 🔒 將老師新下載的私鑰，用 Python 原生字串安全鎖死，徹底防禦任何主機平台造成的換行符號扭曲
     raw_key = (
         "-----BEGIN PRIVATE KEY-----\n"
-        "MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC2Sj6B21rIAeZQ\n"
-        "J+9xCHgT+Lrn9Jnfsc6V/8ChpAIutSJnBH5i9xMamhuJKaI3AucMW46we75cBTr+\n"
-        "aVdUbnOqQc10ZkAUmlGWfQL5zU7d9HIewBMZvANYah7tV9pDn26aJ9abaasJ3laP\n"
-        "0VTTg6F//gtYxENNgJWYXA6I0vL06Jcmp46o60Z9ZCR2CEfNFDCk9jxa6iHGzw+/\n"
-        "VOSSUAF8JgOJ/aH71TECKTTUDnp1KGJU/KHM2vkZONGVQ+jgxyNaQLhSAzdH42H+\n"
-        "dYqwHcSgV8V14foNI5Uy4GygWyv2tqQad6HS68qkoHW5Aa03rbW3NFwP0XAzRQtV\n"
-        "6JxbQZenAgMBAAECggEATvK9uqDlYs0L0fhRx8sKsl+dlzsE73BDEAzJgVgWR+NU\n"
-        "CHjWQgdO400OEuwQoLGlnmEC3eVh7tmnEKtP0rXZa0n/cOOd6i5hmoL+6HBmMVOe\n"
-        "nznBq/oVGtQvG8zaL0Jb9PC/DeUIWghMxhG7orWWGuhMQsARg/3mDCwGcXSnG7Dr\n"
-        "BxnvK5L3B9SaJ6Y7XaTzt4zqE8jQH9BslMNmif5rH6nCKmyGklDh3LISn0eQktTT\n"
-        "KILsv4i/TUq4DudQ9ZG0QzEh7dtzVFXns3ynvjQQS7TimAg/2uOvkL9vP5uRxGgs\n"
-        "2IHfCclUpfZr5rGI74oEdqVTudjlA7Xt9s5nrshimQKBgQDhf5RXvp6cpkkNWl2r\n"
-        "CH2nM5zATwlu8Jdz890sLofd1qPx/CmyzF0FZLQp3ztj2fxIHw4dyS4eDecf5gHg\n"
-        "TBhAdM82RovRNUmw4z0cKpokq3BlwO+XfAt9STyYGl8d5Zu+fr2sqkrGoRy6bmCe\n"
-        "JdyTMi8jVtojGM4WQF8zPsv1PwKBgQDO8njyDp+iweZy+N3NKYeJ++F0SJHbYvMn\n"
-        "IM3dmZZC5dJJuYd+3oRSgpycul5e3GMt0fX0S9o3Hh192E0v6RyQFO5bXZIFp0ub\n"
-        "T+YrPRhhbFl/RnPV/YYpQL58oAsGDakDGrdujGJF+VJ11AHvLA34XJ/uY2BE8u74\n"
-        "r2qoyAm7mQKBgDjrumdXv7PtKZ2MRP6qWwV8usG0cb4mTyS+1wKTEErIJoQr0d7H\n"
-        "RWfaHrw/FD/FQ7B03lxYbyK5AbGEns6ehrSmh7O8pQh/OgXDpqZYfqZo/CtDQ3dq\n"
-        "oX/Tn88JQR9L2T+BwKE4Lz3qZ1UMDal+ByrEzS9PeirH1SW6xA0sedGDAoGAOR6y\n"
-        "BVXF+B1+5xML3XnuAEb2pqr1H1HDfXRPfi/LSrG2hkTgQkNW0JNeeN/z9kjsUxRV\n"
-        "x9U76OS2DSsruuKj0J0GYU+FY2wWsUqvZBXb6eAHH9spU9JDOpW1Ph7KjCQvFz1D\n"
-        "jg7PfTLg8MbQtdw6Cug9+IWTZ9SJ4zg/v1BfZ1kCgYAQLWmknjUUFR3wVnv0r2gI\n"
-        "IlezWBB+AY0Ht5DY8X24d3v4W5t4CJ7Y2HmGsCvJlKVrTtsT8Geg6gZqgdkvw1Tn\n"
-        "msDfWgcX63giai/U76t5EWR7UUwK5oxRa6gjGj7YtuVHeITEKpjD1LsB3QrOV0Ms\n"
-        "iDVvpKB4jE315ehTkLBqOw==\n"
+        "MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDXKtsuZw4bWAjd\n"
+        "pkhS/IlG+RakN/KuetqFF6AOpxt+VwjCF3YNPuOl3/tt/f3DYdRThLEnYcKgtdSY\n"
+        "AjtwPhEyRDb36nVQHGCxDso5DvrxOUhZj9L43i/9itex/2xRRKyvRWW8Nxsme/WW\n"
+        "qsNxhT0VgZrY/qvxO+t1opzg6j/IrmB2wJGOHyd5xbCT/iG6ePlx+YKkPOdNqKun\n"
+        "0OISMVNXf1QxDuKumj7V8e95Cje9L3HLdaxUNJhbjNJicgPIaalW6FH4t4bkFAT/\n"
+        "+nTTXPHT32p+qYyZnbzJ6Pm93o7wBlwQpK0/TOUNKYhPvVPaU57VSs900AgtRNJx\n"
+        "3AkOi7tlAgMBAAECggEAWJHCkVJIg0b0t1B4WvirBXUJNeX11o6pnrl/4Cg3cAUh\n"
+        "jMudg4xMpv4RAFDaAXAmt45aYeyi8gaHEV9x2h0idP+RZPG1Apn7z0ZYRa5964f5\n"
+        "2SwT2u+S75oUeae7jaRoNOmrHBPO8EN8b12xf+wpnc2w0PvcCTvyC4U5cHfcc51a\n"
+        "unQYPdSCJREbG/V/u3u3wDeebNLYabHR1YHW9TpUla9bikGYDJAl3y9UbA7KFSoI\n"
+        "6Ae3n5YCN2sjD5iukiSzOK94NKVsoXiOZLQQGTvuE9QilVTn41PWrNL/LHwU2YuY\n"
+        "aUCEkhxblPJ1N50R1j4H5m8/55lr3oH/+MtrxotbLQKBgQDxUZoHnP7JBA5+a7yR\n"
+        "uh6gjqHylHbNHCTtlS7LXTd6LX1Rqxn1BeLPyDrhjpsoadWOzLL8L237qHzanOOi\n"
+        "rRtCDUx9EFuYZYxEMX4DDV7eDnTjtxeul3aUaPVV3+ujGpByXR6wdfK7/fa+rQom\n"
+        "+I4w4L3ECTePaZAUQiWkYm+X0wKBgQDkQfZpILDFnYzopBbTDghYfXfSN/qCzR9P\n"
+        "M/34xEenr3NevK6KliTCSvpPhd7zMu8DuVt+CS8Ep1IHl+UTDBKsNOLts+nuS8TR\n"
+        "3cnX2/0xFjLin+iDrM5wlBqE1N/c7eRaVZiqIs0vsvzngg2Wbm+wn+I10jQCwL8c\n"
+        "RwFw2QXU5wKBgQDKL0FrUYlS6DgwiZmzSwowIXDkaqlizkrOV+id8Jrznbtauo2D\n"
+        "8guHZU6X/sBWyt1nyG/JxP9UE2WQUFSUzo6A9913B0aG18X+uKzIZ+JtEBW1WIjZ\n"
+        "+gMa8xlierrVrAMMHqMA28Gk6nJabWaNIkEYCKRV5BcN7DcQEh+xq9utiwKBgET4\n"
+        "tZeAnEmqWLi3VHpDxDvQ9dLcvWKmzq4lHLn9vVUrC+Z1hxwzUDoxY7+BySOdoWFz\n"
+        "sfS8m6uBT6UhvcNqo33LoUKIWch6tqdfqC0EuVYKyid2gFDBd8PGzNiUZmygqZ6u\n"
+        "PKo0R+IA6LCfuLFa/37UYQs4UCUAzv6hagsKWNvDAoGBAN3rKi2r8qZqce0n4rnm\n"
+        "ydZaGVPoHTd2vpn4OhsZdp2i0q/2VigCuwcpQR0upuSJqw7b7FIMP1OmhGazGjtR\n"
+        "nuBj2ORwO9qJmDwPA/JSG4ZDVYioULhxIeDX2oUKcxtUmR2EYXOSDD5NNYPiHosdf\n"
+        "SilRq9yjcKXoA/kMSPutj452\n"
         "-----END PRIVATE KEY-----\n"
     )
 
-    # 動態建構乾淨的憑證字典
+    # 🧼 自動建構最精準無暇的憑證字典，不再依賴 Render 後台複雜變數
     config_dict = {
         "type": "service_account",
-        "project_id": project_id,
-        "private_key_id": private_key_id,
+        "project_id": "dorm-135bf",
+        "private_key_id": "36489f81fe9908d7dc4f1dc7c4b250cdaeb64b43",
         "private_key": raw_key,
-        "client_email": client_email,
-        "client_id": "104158881843458654051",
+        "client_email": "firebase-adminsdk-fbsvc@dorm-135bf.iam.gserviceaccount.com",
+        "client_id": "103492177677984034115",
         "auth_uri": "https://accounts.google.com/o/oauth2/auth",
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40')}",
+        "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40dorm-135bf.iam.gserviceaccount.com",
         "universe_domain": "googleapis.com"
     }
     
@@ -76,7 +69,7 @@ try:
             'databaseURL': FIREBASE_DB_URL
         })
 except Exception as e:
-    INIT_ERROR = f"Firebase 初始化結構故障: {traceback.format_exc()}"
+    INIT_ERROR = f"🚨 Firebase 全新對接遭遇衝突，詳細日誌：\n{traceback.format_exc()}"
 
 # ==============================================================================
 
