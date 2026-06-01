@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宿舍填報系統 - 老師審核端</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen p-6">
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <div class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800">👨‍🏫 宿舍填報週課表審核大總表</h1>
+                <p class="text-sm text-slate-500 mt-1">💡 提示：點擊表格中的【工讀】或【省親】格子，即可在下方查看該學生的完整申請細節！</p>
+            </div>
+            <a href="/logout" class="bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 px-4 py-2 rounded-xl text-sm font-semibold">安全登出</a>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3">
+                <h3 class="text-sm font-bold text-slate-700">⏱️ 設定學生申請截止時間</h3>
+                <form action="/teacher/save_settings" method="POST" class="flex gap-2">
+                    <input type="date" name="deadline_date" required class="border px-3 py-2 rounded-xl text-sm">
+                    <input type="time" name="deadline_time" required class="border px-3 py-2 rounded-xl text-sm">
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700">儲存時限</button>
+                </form>
+                <p class="text-xs text-red-500 font-medium">目前系統設定截止於：{{ settings.deadline }}</p>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3">
+                <h3 class="text-sm font-bold text-slate-700">📅 請選擇要申請當週的【星期一】</h3>
+                <input type="date" id="week_monday" onchange="updateWeekDates()" class="border px-4 py-2 rounded-xl text-sm bg-slate-50 font-bold text-blue-600">
+            </div>
+        </div>
+
+        <div id="detail-panel" class="hidden bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 p-5 rounded-2xl shadow-inner space-y-2">
+            <div class="flex justify-between items-center border-b border-blue-200 pb-2">
+                <h3 class="text-base font-bold text-slate-800">📋 學生申請詳細資料面板</h3>
+                <button onclick="document.getElementById('detail-panel').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 font-bold">✕ 關閉</button>
+            </div>
+            <div id="detail-content" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700 pt-1">
+                </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-800 text-white text-xs font-bold tracking-wider">
+                            <th class="p-4 w-24">學生學號</th>
+                            <th class="p-4 w-24">姓名</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-mon">一</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-tue">二</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-wed">三</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-thu">四</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-fri">五</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-sat">六</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-sun">日</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y text-sm text-slate-700" id="table-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="flex justify-end pt-4">
+            <button onclick="triggerAutomation()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg text-lg transition duration-150 active:scale-95">
+                🔒 本週確定無誤，送出自動化填報學校網頁
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const rawApplications = {{ applications | tojson | safe }};
+
+        function getRecentMonday() {
+            let d = new Date();
+            let day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1);
+            return new Date(d.setDate(diff)).toISOString().split('T')[0];
+        }
+        document.getElementById('week_monday').value = getRecentMonday();
+
+        function calculateStatus(app, checkDateStr) {
+            if (app.leave_type === "工讀") {
+                if (app.work_date !== checkDateStr) return null;
+                let place = app.work_place;
+                let sTime = app.start_time; 
+                let bTime = app.back_time;
+                let early = (place === "萬豪") ? (sTime < "09:30" ? "免早點" : "要早點") : (sTime < "09:00" ? "免早點" : "要早點");
+                let late = bTime < "21:30" ? "要晚點" : "免晚點";
+                return `工讀(${early},${late})`;
+            }
+            
+            if (app.leave_type === "省親") {
+                let startD = app.fam_start_date;
+                let endD = app.fam_end_date;
+                let sTime = app.fam_start_time;
+                if (checkDateStr < startD || checkDateStr > endD) return null;
+                if (checkDateStr === startD) {
+                    return `省親(${sTime > "07:30" ? "要早點" : "免早點"},免晚點)`;
+                }
+                if (checkDateStr === endD) {
+                    return `省親(免早點,要晚點)`;
+                }
+                return "省親(免早點,免晚點)";
+            }
+            
+            if (app.leave_type === "回國") {
+                if (checkDateStr < app.go_date || checkDateStr > app.back_country_date) return null;
+                return app.teacher_status || "未設定";
+            }
+            return null;
+        }
+
+        // 🔥 點擊格子時觸發：把隱藏在裡面的所有詳細欄位噴出來！
+        function showDetail(appJsonStr) {
+            const app = JSON.parse(decodeURIComponent(appJsonStr));
+            const panel = document.getElementById('detail-panel');
+            const content = document.getElementById('detail-content');
+            
+            panel.classList.remove('hidden');
+            
+            let html = `
+                <div>
+                    <p class="mb-1"><strong>👤 學生基本資料：</strong> <span class="text-blue-700 font-bold">${app.student_name} (${app.student_id})</span></p>
+                    <p class="mb-1"><strong>📌 申請假別：</strong> <span class="bg-indigo-600 text-white px-2 py-0.5 text-xs rounded font-bold">${app.leave_type}</span></p>
+                    <p class="mb-1"><strong>⏱️ 學生手機送出時間：</strong> <span class="text-gray-500">${app.timestamp || '無紀錄'}</span></p>
+                </div>
+                <div class="bg-white p-3 rounded-xl border border-blue-100 space-y-1">
+                    <p class="text-xs font-bold text-indigo-500 uppercase tracking-wider border-b pb-1 mb-1">📋 學生填報之原始詳細欄位</p>
+            `;
+
+            if (app.leave_type === "工讀") {
+                html += `
+                    <p><strong>工讀日期：</strong> ${app.work_date}</p>
+                    <p><strong>工讀商家地點：</strong> <span class="text-amber-700 font-bold">${app.work_place}</span></p>
+                    <p><strong>🪪 上班打卡時間：</strong> ${app.start_time}</p>
+                    <p><strong>🪪 下班打卡時間：</strong> ${app.end_time}</p>
+                    <p><strong>🏠 預計返回宿舍時間：</strong> <span class="text-red-600 font-bold">${app.back_time}</span></p>
+                `;
+            } else if (app.leave_type === "省親") {
+                html += `
+                    <p><strong>省親起迄：</strong> ${app.fam_start_date} (${app.fam_start_time}) ～ ${app.fam_end_date} (${app.fam_end_time})</p>
+                    <p><strong>省親對象姓名：</strong> ${app.fam_name}</p>
+                    <p><strong>與學生關係：</strong> ${app.fam_rel}</p>
+                    <p><strong>📞 聯絡電話：</strong> <a href="tel:${app.fam_phone}" class="text-blue-600 underline">${app.fam_phone}</a></p>
+                    <p><strong>📍 省親目的地地址：</strong> ${app.fam_addr}</p>
+                `;
+            } else if (app.leave_type === "回國") {
+                html += `
+                    <p><strong>出發日期：</strong> ${app.go_date} (${app.go_time})</p>
+                    <p><strong>🛫 出發機場：</strong> ${app.airport}</p>
+                    <p><strong>回來日期：</strong> ${app.back_country_date} (${app.back_country_time})</p>
+                `;
+            }
+
+            html += `</div>`;
+            content.innerHTML = html;
+            
+            // 讓網頁自動平滑滾動到詳情面板，方便老師觀看
+            panel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function updateWeekDates() {
+            let mondayStr = document.getElementById('week_monday').value;
+            if(!mondayStr) return;
+            
+            let monday = new Date(mondayStr);
+            let weekDaysLabels = ["一", "二", "三", "四", "五", "六", "日"];
+            let dateStrings = [];
+            
+            for(let i=0; i<7; i++) {
+                let nextDay = new Date(monday);
+                nextDay.setDate(monday.getDate() + i);
+                dateStrings.push(nextDay.toISOString().split('T')[0]);
+                
+                let m = nextDay.getMonth() + 1;
+                let d = nextDay.getDate();
+                document.getElementById(['th-mon', 'th-tue', 'th-wed', 'th-thu', 'th-fri', 'th-sat', 'th-sun'][i]).innerHTML = `${weekDaysLabels[i]}<br><span class="text-[10px] font-normal opacity-80">${m}/${d}</span>`;
+            }
+
+            let studentsMap = {};
+            rawApplications.forEach(app => {
+                if(!studentsMap[app.student_id]) {
+                    studentsMap[app.student_id] = { id: app.student_id, name: app.student_name, list: [] };
+                }
+                studentsMap[app.student_id].list.push(app);
+            });
+
+            let sortedStudents = Object.values(studentsMap).sort((a,b) => a.id.localeCompare(b.id));
+            let tbody = document.getElementById('table-body');
+            tbody.innerHTML = "";
+
+            sortedStudents.forEach(student => {
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                
+                let html = `
+                    <td class="p-4 font-mono font-bold text-blue-600">${student.id}</td>
+                    <td class="p-4 font-semibold">${student.name}</td>
+                `;
+
+                for(let i=0; i<7; i++) {
+                    let currentDate = dateStrings[i];
+                    let cellContent = `<span class="text-gray-400 block text-center py-1">留宿</span>`;
+                    
+                    for(let app of student.list) {
+                        let status = calculateStatus(app, currentDate);
+                        if(status) {
+                            // 把該筆申請的所有詳細資料打包編碼轉成字串，藏在按鈕的點擊事件中
+                            let appString = encodeURIComponent(JSON.stringify(app));
+                            
+                            if(status.includes("工讀")) {
+                                cellContent = `<button onclick="showDetail('${appString}')" class="w-full bg-amber-100 hover:bg-amber-200 text-amber-800 px-1 py-1.5 rounded border border-amber-300 block font-bold text-center text-[11px] transition shadow-sm">${status}</button>`;
+                            } else if(status.includes("省親")) {
+                                cellContent = `<button onclick="showDetail('${appString}')" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 px-1 py-1.5 rounded border border-blue-300 block font-bold text-center text-[11px] transition shadow-sm">${status}</button>`;
+                            } else {
+                                cellContent = `
+                                    <div class="space-y-1">
+                                        <button onclick="showDetail('${appString}')" class="w-full bg-purple-100 hover:bg-purple-200 text-purple-800 p-0.5 rounded border border-purple-300 block font-bold text-center text-[10px]">🔍 看回國時間</button>
+                                        <select onchange="updateCountryStatus('${student.id}', '${currentDate}', this.value)" class="border rounded bg-white text-[11px] p-0.5 w-full">
+                                            <option value="未設定" ${status==='未設定'?'selected':''}>未設定</option>
+                                            <option value="回國(免早點,免晚點)" ${status==='回國(免早點,免晚點)'?'selected':''}>回國(免早免晚)</option>
+                                            <option value="回國(要早點,免晚點)" ${status==='回國(要早點,免晚點)'?'selected':''}>回國(要早免晚)</option>
+                                            <option value="回國(免早點,要晚點)" ${status==='回國(免早點,要晚點)'?'selected':''}>回國(免早要晚)</option>
+                                        </select>
+                                    </div>`;
+                            }
+                            break; 
+                        }
+                    }
+                    html += `<td class="p-2 border-l">${cellContent}</td>`;
+                }
+                tr.innerHTML = html;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateCountryStatus(studentId, targetDate, val) {
+            let fd = new FormData();
+            fd.append('student_id', studentId);
+            fd.append('target_date', targetDate);
+            fd.append('status', val);
+            fetch('/teacher/update_status', { method: 'POST', body: fd });
+        }
+
+        function triggerAutomation() {
+            fetch('/teacher/confirm_week', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => { alert(data.message); });
+        }
+
+        window.onload = updateWeekDates;
+    </script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>填報系統 - 學生端</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 flex flex-col items-center">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-xl p-6 border border-gray-100 mt-4">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <p class="text-xs text-gray-400">目前登入學生</p>
+                <h3 class="text-lg font-bold text-gray-800">{{ student_name }} ({{ student_id }})</h3>
+            </div>
+            <a href="/logout" class="text-xs bg-gray-100 text-gray-500 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:text-red-600">登出</a>
+        </div>
+
+        <form id="appForm" class="space-y-5">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">📌 請選擇填報假別</label>
+                <select name="leave_type" id="leave_type" onchange="toggleSections()" class="w-full px-4 py-3 border border-gray-200 rounded-2xl text-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                    <option value="工讀">🛠️ 工讀</option>
+                    <option value="省親">🏠 省親</option>
+                    <option value="回國">✈️ 回國</option>
+                </select>
+            </div>
+
+            <div id="section-work" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-600 mb-1">工讀申請日期</label>
+                    <input type="date" name="work_date" class="w-full px-4 py-3 border rounded-xl text-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-600 mb-1">工讀地點</label>
+                    <select name="work_place" id="work_place" onchange="checkWorkPlaceOther()" class="w-full px-4 py-3 border rounded-xl bg-white text-lg">
+                        <option value="萬豪">萬豪</option>
+                        <option value="漢來本館">漢來本館</option>
+                        <option value="漢來巨蛋">漢來巨蛋</option>
+                        <option value="西堤">西堤</option>
+                        <option value="其他">其他</option>
+                    </select>
+                </div>
+                <div id="work-place-other-div" class="hidden">
+                    <label class="block text-sm font-semibold text-red-600 mb-1">請輸入其他工讀地點</label>
+                    <input type="text" name="work_place_other" placeholder="例如：新光三越" class="w-full px-4 py-3 border rounded-xl">
+                </div>
+                <div class="grid grid-cols-1 gap-3">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">上班打卡時間</label>
+                        <input type="time" name="start_time" class="w-full px-4 py-3 border rounded-xl text-lg" step="300" required value="08:00">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">下班打卡時間</label>
+                        <input type="time" name="end_time" class="w-full px-4 py-3 border rounded-xl text-lg" step="300" required value="17:00">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">預計到達宿舍時間</label>
+                        <input type="time" name="back_time" class="w-full px-4 py-3 border rounded-xl text-lg" step="300" required value="21:00">
+                    </div>
+                </div>
+            </div>
+
+            <div id="section-family" class="space-y-4 hidden">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">開始日期</label>
+                        <input type="date" name="fam_start_date" class="w-full px-3 py-3 border rounded-xl">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">開始時間</label>
+                        <input type="time" name="fam_start_time" class="w-full px-3 py-3 border rounded-xl" value="08:00">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">結束日期</label>
+                        <input type="date" name="fam_end_date" class="w-full px-3 py-3 border rounded-xl">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">結束時間</label>
+                        <input type="time" name="fam_end_time" class="w-full px-3 py-3 border rounded-xl" value="21:00">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-600 mb-1">省親對象名字</label>
+                    <input type="text" name="fam_name" placeholder="請填寫姓名" class="w-full px-4 py-3 border rounded-xl">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-600 mb-1">與省親對象的關係</label>
+                    <input type="text" name="fam_rel" placeholder="例如：父親、祖母" class="w-full px-4 py-3 border rounded-xl">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-600 mb-1">聯絡電話</label>
+                    <input type="tel" name="fam_phone" placeholder="請填寫電話號碼" class="w-full px-4 py-3 border rounded-xl">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-600 mb-1">省親目的地址</label>
+                    <input type="text" name="fam_addr" placeholder="請填寫詳細居住地址" class="w-full px-4 py-3 border rounded-xl">
+                </div>
+            </div>
+
+            <div id="section-country" class="space-y-4 hidden">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">回國日期</label>
+                        <input type="date" name="go_date" class="w-full px-3 py-3 border rounded-xl">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">台灣起飛時間</label>
+                        <input type="time" name="go_time" class="w-full px-3 py-3 border rounded-xl">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-600 mb-1">台灣出發機場</label>
+                    <select name="airport" class="w-full px-4 py-3 border rounded-xl bg-white">
+                        <option value="高雄小港機場">高雄小港機場</option>
+                        <option value="桃園國際機場">桃園國際機場</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">回來台灣日期</label>
+                        <input type="date" name="back_country_date" class="w-full px-3 py-3 border rounded-xl">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-600 mb-1">抵達台灣時間</label>
+                        <input type="time" name="back_country_time" class="w-full px-3 py-3 border rounded-xl">
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" onclick="sendData()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg text-lg active:scale-95 transition duration-150">📤 確認無誤，送出申請</button>
+        </form>
+    </div>
+
+    <script>
+        // 設定今天的預設日期
+        const today = new Date().toISOString().split('T')[0];
+        document.querySelectorAll('input[type="date"]').forEach(el => el.value = today);
+
+        function toggleSections() {
+            const val = document.getElementById('leave_type').value;
+            document.getElementById('section-work').classList.add('hidden');
+            document.getElementById('section-family').classList.add('hidden');
+            document.getElementById('section-country').classList.add('hidden');
+            
+            if(val === '工讀') document.getElementById('section-work').classList.remove('hidden');
+            if(val === '省親') document.getElementById('section-family').classList.remove('hidden');
+            if(val === '回國') document.getElementById('section-country').classList.remove('hidden');
+        }
+
+        function checkWorkPlaceOther() {
+            const place = document.getElementById('work_place').value;
+            const otherDiv = document.getElementById('work-place-other-div');
+            if(place === '其他') otherDiv.classList.remove('hidden');
+            else otherDiv.classList.add('hidden');
+        }
+
+        function sendData() {
+            const form = document.getElementById('appForm');
+            const formData = new FormData(form);
+            
+            fetch('/student', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message);
+                if(data.status === 'success') { window.location.reload(); }
+            });
+        }
+    </script>
+</body>
+</html>
