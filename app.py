@@ -33,7 +33,6 @@ def internal_server_error(e):
     return f"""
     <div style="font-family:sans-serif; padding:20px; border:3px solid red; background:#fff5f5; border-radius:8px;">
         <h2 style="color:red; margin-top:0;">🚨 系統連線發生問題</h2>
-        <p>請幫我<b>「整頁截圖」</b>傳給 AI 助手：</p>
         <pre style="background:#222; color:#fff; padding:15px; border-radius:5px; overflow-x:auto;">{display_err}</pre>
         <br>
         <a href="/" style="background:gray; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;">返回首頁</a>
@@ -76,6 +75,8 @@ def student_form():
         target_date = ""
         if form_data.get("leave_type") == "工讀":
             target_date = form_data.get("work_date")
+            if form_data.get("work_place") == "其他":
+                form_data["work_place"] = form_data.get("work_place_other", "其他外派")
         elif form_data.get("leave_type") == "省親":
             target_date = form_data.get("fam_start_date")
         elif form_data.get("leave_type") == "回國":
@@ -90,10 +91,43 @@ def student_form():
             "timestamp": dt.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
-        supabase.table("applications").upsert(payload, on_conflict="student_id,target_date").execute()
-        return jsonify({"status": "success", "message": f"📥 假單已安全存入雲端硬碟！"})
+        try:
+            supabase.table("applications").upsert(payload, on_conflict="student_id,target_date").execute()
+            return jsonify({
+                "status": "success", 
+                "message": "📥 資料已安全存入 Firebase 資料庫！"
+            })
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e)})
 
     return render_template("student.html", student_id=session.get("student_id"), student_name=session.get("student_name"))
+
+# 🛡️ 老師專用一：儲存截止時間的路徑（補回這裡！）
+@app.route("/teacher/save_settings", methods=["POST"])
+def save_settings():
+    if INIT_ERROR: return internal_server_error(None)
+    if session.get("role") != "teacher": return redirect(url_for("login"))
+    
+    new_dl = f"{request.form.get('deadline_date')} {request.form.get('deadline_time')}"
+    try:
+        supabase.table("settings").upsert({"id": 1, "deadline": new_dl}).execute()
+    except:
+        pass
+    return redirect(url_for("teacher_dashboard"))
+
+# 🛡️ 老師專用二：更改審核狀態的路徑（核准/拒絕）
+@app.route("/teacher/update_status", methods=["POST"])
+def update_status():
+    if session.get("role") != "teacher": return jsonify({"status": "error", "message": "權限不足"})
+    
+    sid = request.form.get("student_id")
+    tdate = request.form.get("target_date")
+    status = request.form.get("status")
+    try:
+        supabase.table("applications").update({"teacher_status": status}).eq("student_id", sid).eq("target_date", tdate).execute()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/teacher")
 def teacher_dashboard():
