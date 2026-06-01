@@ -10,9 +10,9 @@ app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-# ==================== 🛠️ 【Google 金鑰與網址 100% 正確版】 ====================
+# ==================== 🛠️ 【Google 金鑰與網址 強力排毒版】 ====================
 
-FIREBASE_CONFIG_STR = """{
+RAW_CONFIG = """{
   "type": "service_account",
   "project_id": "dorm-a0fe8",
   "private_key_id": "3e05bc307d8456566dd9a99c9f10419c360dd6d4",
@@ -28,27 +28,37 @@ FIREBASE_CONFIG_STR = """{
 
 FIREBASE_DB_URL = "https://dorm-a0fe8-default-rtdb.asia-southeast1.firebasedatabase.app"
 
-# ==============================================================================
-
-# 初始化 Firebase 連線
+# 🧼 核心修正：強制清洗隱形字元與空格排毒
 try:
+    clean_config_str = RAW_CONFIG.strip().replace('\xa0', ' ')
+    config_dict = json.loads(clean_config_str)
+    
     if not firebase_admin._apps:
-        cred = credentials.Certificate(json.loads(FIREBASE_CONFIG_STR.strip()))
+        cred = credentials.Certificate(config_dict)
         firebase_admin.initialize_app(cred, {
             'databaseURL': FIREBASE_DB_URL
         })
+    INIT_ERROR = None
 except Exception as e:
-    print(f"Firebase 初始化失敗: {e}")
+    INIT_ERROR = f"Firebase 初始化階段即失敗，錯誤訊息：{traceback.format_exc()}"
 
-# 🔥 【強力防噴錯除錯器】如果網頁爆炸，直接把主機錯誤吐在畫面上給老師看
+# ==============================================================================
+
+# 🔥 防噴錯除錯器
 @app.errorhandler(500)
 def internal_server_error(e):
     err = traceback.format_exc()
+    # 如果一開始就初始化失敗，直接顯示初始化錯誤
+    if INIT_ERROR:
+        display_err = INIT_ERROR
+    else:
+        display_err = err
+        
     return f"""
     <div style="font-family:sans-serif; padding:20px; border:3px solid red; background:#fff5f5; border-radius:8px;">
         <h2 style="color:red; margin-top:0;">🚨 發現系統內部衝突！</h2>
-        <p>老師別慌，請幫我<b>「整頁截圖」</b>傳給 AI 助手，這行字會直接告訴我們哪裡寫錯：</p>
-        <pre style="background:#222; color:#fff; padding:15px; border-radius:5px; overflow-x:auto;">{err}</pre>
+        <p>老師別慌，請幫我<b>「整頁截圖」</b>傳給 AI 助手：</p>
+        <pre style="background:#222; color:#fff; padding:15px; border-radius:5px; overflow-x:auto;">{display_err}</pre>
         <br>
         <a href="/" style="background:gray; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;">返回首頁</a>
     </div>
@@ -59,14 +69,15 @@ def method_not_allowed(e):
     return """
     <div style="font-family:sans-serif; padding:20px; border:3px solid orange; background:#fffbe6; border-radius:8px;">
         <h2 style="color:orange; margin-top:0;">⚠️ 瀏覽器抓取網頁方式錯誤 (405)</h2>
-        <p>老師/同學，這通常是因為您<b>「重新整理了剛送出資料的網頁」</b>，或是直接在網址列手打輸入了錯誤的網址。</p>
-        <p style="color:#666;">請點擊下方按鈕，回到首頁重新正常登入操作即可！</p>
+        <p>請點擊下方按鈕，回到首頁重新正常登入操作即可！</p>
         <br>
         <a href="/" style="background:#1890ff; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold;">返回登入首頁</a>
     </div>
     """, 405
 
 def load_data():
+    if INIT_ERROR:
+        raise Exception("由於 Firebase 初始化失敗，拒絕執行 load_data()")
     try:
         ref = firebase_db.reference('/')
         data = ref.get()
@@ -83,6 +94,9 @@ def load_data():
 
 @app.route("/", methods=["GET", "POST"])
 def login():
+    if INIT_ERROR:
+        return internal_server_error(None)
+        
     if request.method == "POST":
         role = request.form.get("role")
         if role == "teacher":
@@ -108,6 +122,8 @@ def login():
 
 @app.route("/student", methods=["GET", "POST"])
 def student_form():
+    if INIT_ERROR:
+        return internal_server_error(None)
     if session.get("role") != "student":
         return redirect(url_for("login"))
         
@@ -145,6 +161,8 @@ def student_form():
 
 @app.route("/teacher")
 def teacher_dashboard():
+    if INIT_ERROR:
+        return internal_server_error(None)
     if session.get("role") != "teacher":
         return redirect(url_for("login"))
     
@@ -159,7 +177,7 @@ def teacher_dashboard():
 
 @app.route("/teacher/save_settings", methods=["POST"])
 def save_settings():
-    if session.get("role") != "teacher":
+    if INIT_ERROR or session.get("role") != "teacher":
         return jsonify({"status": "error"})
     new_dl = f"{request.form.get('deadline_date')} {request.form.get('deadline_time')}"
     
@@ -170,7 +188,7 @@ def save_settings():
 
 @app.route("/teacher/update_status", methods=["POST"])
 def update_status():
-    if session.get("role") != "teacher":
+    if INIT_ERROR or session.get("role") != "teacher":
         return jsonify({"status": "error"})
     student_id = request.form.get("student_id")
     target_date = request.form.get("target_date")
