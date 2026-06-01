@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import json
 import os
+import traceback
 from datetime import datetime as dt
 import firebase_admin
 from firebase_admin import credentials, db as firebase_db
@@ -11,7 +12,6 @@ TEACHER_PWD = "0800092000"
 
 # ==================== 🛠️ 【Google 金鑰與網址 100% 正確版】 ====================
 
-# 🔑 1. Firebase 金鑰 (已清除所有重複與錯位程式碼)
 FIREBASE_CONFIG_STR = """{
   "type": "service_account",
   "project_id": "dorm-a0fe8",
@@ -26,7 +26,6 @@ FIREBASE_CONFIG_STR = """{
   "universe_domain": "googleapis.com"
 }"""
 
-# 🔗 2. 資料庫網址 (已校正為與金鑰專案 dorm-a0fe8 完全一致)
 FIREBASE_DB_URL = "https://dorm-a0fe8-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 # ==============================================================================
@@ -40,6 +39,32 @@ try:
         })
 except Exception as e:
     print(f"Firebase 初始化失敗: {e}")
+
+# 🔥 【強力防噴錯除錯器】如果網頁爆炸，直接把主機錯誤吐在畫面上給老師看
+@app.errorhandler(500)
+def internal_server_error(e):
+    err = traceback.format_exc()
+    return f"""
+    <div style="font-family:sans-serif; padding:20px; border:3px solid red; background:#fff5f5; border-radius:8px;">
+        <h2 style="color:red; margin-top:0;">🚨 發現系統內部衝突！</h2>
+        <p>老師別慌，請幫我<b>「整頁截圖」</b>傳給 AI 助手，這行字會直接告訴我們哪裡寫錯：</p>
+        <pre style="background:#222; color:#fff; padding:15px; border-radius:5px; overflow-x:auto;">{err}</pre>
+        <br>
+        <a href="/" style="background:gray; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;">返回首頁</a>
+    </div>
+    """, 500
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    return """
+    <div style="font-family:sans-serif; padding:20px; border:3px solid orange; background:#fffbe6; border-radius:8px;">
+        <h2 style="color:orange; margin-top:0;">⚠️ 瀏覽器抓取網頁方式錯誤 (405)</h2>
+        <p>老師/同學，這通常是因為您<b>「重新整理了剛送出資料的網頁」</b>，或是直接在網址列手打輸入了錯誤的網址。</p>
+        <p style="color:#666;">請點擊下方按鈕，回到首頁重新正常登入操作即可！</p>
+        <br>
+        <a href="/" style="background:#1890ff; color:white; padding:10px 15px; text-decoration:none; border-radius:5px; font-weight:bold;">返回登入首頁</a>
+    </div>
+    """, 405
 
 def load_data():
     try:
