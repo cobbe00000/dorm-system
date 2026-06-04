@@ -95,14 +95,25 @@ def student_form():
             supabase.table("applications").upsert(payload, on_conflict="student_id,target_date").execute()
             return jsonify({
                 "status": "success", 
-                "message": "📥 資料已安全存入 Firebase 資料庫！"
+                "message": "📥 資料已安全存入雲端資料庫！"
             })
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)})
+            err_msg = str(e)
+            # 🎯 攔截 RLS，吐出印尼文、越南文、中文三語警報！
+            if "row-level security" in err_msg or "42501" in err_msg:
+                multilingual_msg = (
+                    "[ID] Waktu pendaftaran telah habis, silakan hubungi guru secara langsung! \n"
+                    "[VN] Thời gian đăng ký đã hết, vui lòng gặp trực tiếp giáo viên để đăng ký! \n"
+                    "⚠️ 登記時間已過，請親自找老師登記！"
+                )
+                return jsonify({
+                    "status": "error", 
+                    "message": multilingual_msg
+                })
+            return jsonify({"status": "error", "message": err_msg})
 
     return render_template("student.html", student_id=session.get("student_id"), student_name=session.get("student_name"))
 
-# 🛡️ 老師專用一：儲存截止時間的路徑（補回這裡！）
 @app.route("/teacher/save_settings", methods=["POST"])
 def save_settings():
     if INIT_ERROR: return internal_server_error(None)
@@ -111,11 +122,19 @@ def save_settings():
     new_dl = f"{request.form.get('deadline_date')} {request.form.get('deadline_time')}"
     try:
         supabase.table("settings").upsert({"id": 1, "deadline": new_dl}).execute()
-    except:
-        pass
+    except Exception as e:
+        err_msg = str(e)
+        if "row-level security" in err_msg or "42501" in err_msg:
+            return """
+            <script>
+                alert("⚠️ Waktu pendaftaran telah habis, silakan hubungi guru secara langsung!
+Thời gian đăng ký đã hết, vui lòng gặp trực tiếp giáo viên để đăng ký!
+⚠️ 登記時間已過，請親自找老師登記！");
+                window.location.href = "/teacher";
+            </script>
+            """
     return redirect(url_for("teacher_dashboard"))
 
-# 🛡️ 老師專用二：更改審核狀態的路徑（核准/拒絕）
 @app.route("/teacher/update_status", methods=["POST"])
 def update_status():
     if session.get("role") != "teacher": return jsonify({"status": "error", "message": "權限不足"})
