@@ -99,11 +99,11 @@ def student_form():
             })
         except Exception as e:
             err_msg = str(e)
-            # 🎯 攔截 RLS，吐出印尼文、越南文、中文三語警報！
+            # 🎯 學生端：攔截 RLS，吐出印尼文、越南文、中文三語警報！
             if "row-level security" in err_msg or "42501" in err_msg:
                 multilingual_msg = (
-                    "[ID] Waktu pendaftaran telah habis, silakan hubungi guru secara langsung! \n"
-                    "[VN] Thời gian đăng ký đã hết, vui lòng gặp trực tiếp giáo viên để đăng ký! \n"
+                    "Waktu pendaftaran telah habis, silakan hubungi guru secara langsung!\n"
+                    "Thời gian đăng ký đã hết, vui lòng gặp trực tiếp giáo viên để đăng ký!\n"
                     "⚠️ 登記時間已過，請親自找老師登記！"
                 )
                 return jsonify({
@@ -125,11 +125,10 @@ def save_settings():
     except Exception as e:
         err_msg = str(e)
         if "row-level security" in err_msg or "42501" in err_msg:
+            # 🎯 老師端防撞牆：修正 JavaScript 換行語法，並改為「印尼 ➔ 越南 ➔ 中文」排序
             return """
             <script>
-                alert("⚠️ Waktu pendaftaran telah habis, silakan hubungi guru secara langsung!
-Thời gian đăng ký đã hết, vui lòng gặp trực tiếp giáo viên để đăng ký!
-⚠️ 登記時間已過，請親自找老師登記！");
+                alert("Waktu pendaftaran telah habis, silakan hubungi guru secara langsung!\\nThời gian đăng ký đã hết, vui lòng gặp trực tiếp giáo viên để đăng ký!\\n⚠️ 登記時間已過，請親自找老師登記！");
                 window.location.href = "/teacher";
             </script>
             """
