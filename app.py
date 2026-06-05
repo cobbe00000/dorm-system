@@ -3,39 +3,39 @@ import os
 import json
 import traceback
 from datetime import datetime as dt, timedelta
-from supabase import create_client, Client
+import pytz # 🎯 引入時區工具
 
 app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-# 🎯 從環境變數讀取 Supabase 的連線資訊
+# 🎯 強制指定台灣時區，徹底解決 Render 伺服器在國外的時差問題
+tw_tz = pytz.timezone('Asia/Taipei')
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
-supabase: Client = None
+supabase = None
 INIT_ERROR = None
 
 try:
     if not SUPABASE_URL or not SUPABASE_KEY:
-        raise Exception("Render 後台尚未設定 SUPABASE_URL 或 SUPABASE_KEY 環境變數！")
-    
+        raise Exception("Render 後台尚未設定環境變數！")
+    from supabase import create_client
     supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 except Exception as e:
-    INIT_ERROR = f"🚨 Supabase 資料庫連線失敗，詳細日誌：\n{traceback.format_exc()}"
+    INIT_ERROR = f"🚨 資料庫連線失敗：\n{traceback.format_exc()}"
 
 # ==============================================================================
 
 def get_week_info(target_date):
-    """🎯 核心計算：根據輸入的日期，計算出該日期所屬週的識別碼(week_id)、週日、週六日期"""
+    """🎯 改用【當週週日的日期】字串作為唯一的 week_id，台美兩端絕對 100% 對齊"""
     idx = (target_date.weekday() + 1) % 7
     sun = target_date - timedelta(days=idx)
     sat = target_date + timedelta(days=(6 - idx))
-    week_id = sun.strftime("%Y-w%U")
-    return week_id, sun.strftime("%Y-%m-%d"), sat.strftime("%Y-%m-%d")
+    return sun.strftime("%Y-%m-%d"), sun.strftime("%Y-%m-%d"), sat.strftime("%Y-%m-%d")
 
 def get_deadline_by_week(week_id, default_sat_str):
-    """🎯 精準讀取某一週的截止日期，若資料庫沒設定，預設為該週六 23:59"""
     try:
         res = supabase.table("settings").select("*").eq("week_id", week_id).execute()
         if res.data:
@@ -48,16 +48,7 @@ def get_deadline_by_week(week_id, default_sat_str):
 
 @app.errorhandler(500)
 def internal_server_error(e):
-    err = traceback.format_exc()
-    display_err = INIT_ERROR if INIT_ERROR else err
-    return f"""
-    <div style="font-family:sans-serif; padding:20px; border:3px solid red; background:#fff5f5; border-radius:8px;">
-        <h2 style="color:red; margin-top:0;">🚨 系統連線發生問題</h2>
-        <pre style="background:#222; color:#fff; padding:15px; border-radius:5px; overflow-x:auto;">{display_err}</pre>
-        <br>
-        <a href="/" style="background:gray; color:white; padding:10px 15px; text-decoration:none; border-radius:5px;">返回首頁</a>
-    </div>
-    """, 500
+    return f"<pre>{INIT_ERROR if INIT_ERROR else traceback.format_exc()}</pre>", 500
 
 @app.route("/", methods=["GET", "POST"])
 def login():
@@ -86,8 +77,6 @@ def student_form():
         target_date = ""
         if form_data.get("leave_type") == "工讀":
             target_date = form_data.get("work_date")
-            if form_data.get("work_place") == "其他":
-                form_data["work_place"] = form_data.get("work_place_other", "其他外派")
         elif form_data.get("leave_type") == "省親":
             target_date = form_data.get("fam_start_date")
         elif form_data.get("leave_type") == "回國":
@@ -99,28 +88,23 @@ def student_form():
             "leave_type": form_data.get("leave_type"),
             "target_date": target_date,
             "details": json.dumps(form_data, ensure_ascii=False),
-            "timestamp": dt.now().strftime("%Y-%m-%d %H:%M:%S")
+            "timestamp": dt.now(tw_tz).strftime("%Y-%m-%d %H:%M:%S")
         }
         
         try:
             supabase.table("applications").upsert(payload, on_conflict="student_id,target_date").execute()
-            return jsonify({
-                "status": "success", 
-                "message": "📥 資料已安全存入雲端資料庫！"
-            })
+            return jsonify({"status": "success", "message": "📥 資料已安全存入雲端資料庫！"})
         except Exception as e:
             err_msg = str(e)
             if "row-level security" in err_msg or "42501" in err_msg:
-                multilingual_msg = (
-                    "Waktu pendaftaran telah habis, silakan hubungi guru secara langsung!\n"
-                    "Thời gian đăng ký đã hết, vui lòng gặp trực tiếp giáo viên để đăng ký!\n"
-                    "⚠️ 登記時間已過，請親自找老師登記！"
-                )
-                return jsonify({"status": "error", "message": multilingual_msg})
+                return jsonify({
+                    "status": "error", 
+                    "message": "Waktu pendaftaran telah habis!\nThời gian đăng ký đã hết!\n⚠️ 登記時間已過或本週尚未開放，請找老師登記！"
+                })
             return jsonify({"status": "error", "message": err_msg})
 
-    # 🎯 學生端：自動調整顯示日期
-    today = dt.now()
+    # 🎯 學生端日期適應：確保取得的是精準的台灣時間
+    today = dt.now(tw_tz)
     _, sun_str, sat_str = get_week_info(today)
     
     return render_template("student.html", 
@@ -131,23 +115,13 @@ def student_form():
 
 @app.route("/teacher/save_settings", methods=["POST"])
 def save_settings():
-    if INIT_ERROR: return internal_server_error(None)
     if session.get("role") != "teacher": return redirect(url_for("login"))
-    
     target_week_id = request.form.get("week_id")
     new_dl = f"{request.form.get('deadline_date')} {request.form.get('deadline_time')}"
-    
     try:
         supabase.table("settings").upsert({"week_id": target_week_id, "deadline": new_dl}).execute()
     except Exception as e:
-        err_msg = str(e)
-        if "row-level security" in err_msg or "42501" in err_msg:
-            return """
-            <script>
-                alert("Waktu pendaftaran telah habis, silakan hubungi guru secara langsung!\\nThời gian đăng ký đã hết, vui lòng gặp trực tiếp giáo viên để đăng ký!\\n⚠️ 登記時間已過，請親自找老師登記！");
-                window.location.href = "/teacher";
-            </script>
-            """
+        pass
     return redirect(url_for("teacher_dashboard"))
 
 @app.route("/teacher/unlock_week", methods=["POST"])
@@ -161,25 +135,13 @@ def unlock_week():
         pass
     return redirect(url_for("teacher_dashboard"))
 
-@app.route("/teacher/update_status", methods=["POST"])
-def update_status():
-    if session.get("role") != "teacher": return jsonify({"status": "error", "message": "權限不足"})
-    
-    sid = request.form.get("student_id")
-    tdate = request.form.get("target_date")
-    status = request.form.get("status")
-    try:
-        supabase.table("applications").update({"teacher_status": status}).eq("student_id", sid).eq("target_date", tdate).execute()
-        return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
-
 @app.route("/teacher")
 def teacher_dashboard():
     if INIT_ERROR: return internal_server_error(None)
     if session.get("role") != "teacher": return redirect(url_for("login"))
     
-    today = dt.now()
+    # 🎯 使用台灣時間計算本週與下週
+    today = dt.now(tw_tz)
     next_week_date = today + timedelta(days=7)
     
     this_week_id, this_sun, this_sat = get_week_info(today)
@@ -209,12 +171,23 @@ def teacher_dashboard():
                            applications=sorted(apps, key=lambda x: x.get("student_id", "")), 
                            week_settings=week_settings)
 
+@app.route("/teacher/update_status", methods=["POST"])
+def update_status():
+    if session.get("role") != "teacher": return jsonify({"status": "error", "message": "權限不足"})
+    sid = request.form.get("student_id")
+    tdate = request.form.get("target_date")
+    status = request.form.get("status")
+    try:
+        supabase.table("applications").update({"teacher_status": status}).eq("student_id", sid).eq("target_date", tdate).execute()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# 🎯 這裡做了安全修改：移除了 Gunicorn 依賴，改用內建標準啟動
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
