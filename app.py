@@ -3,14 +3,14 @@ import os
 import json
 import traceback
 from datetime import datetime as dt, timedelta
-import pytz # 🎯 引入時區工具
+from zoneinfo import ZoneInfo # 🎯 改用 Python 3 內建時區庫，Render 100% 支援不報錯
 
 app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-# 🎯 強制指定台灣時區，徹底解決 Render 伺服器在國外的時差問題
-tw_tz = pytz.timezone('Asia/Taipei')
+# 🎯 強制指定台北時間時區
+tw_tz = ZoneInfo('Asia/Taipei')
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -29,7 +29,7 @@ except Exception as e:
 # ==============================================================================
 
 def get_week_info(target_date):
-    """🎯 改用【當週週日的日期】字串作為唯一的 week_id，台美兩端絕對 100% 對齊"""
+    """🎯 以當週週日的日期字串作為唯一的 week_id"""
     idx = (target_date.weekday() + 1) % 7
     sun = target_date - timedelta(days=idx)
     sat = target_date + timedelta(days=(6 - idx))
@@ -103,7 +103,7 @@ def student_form():
                 })
             return jsonify({"status": "error", "message": err_msg})
 
-    # 🎯 學生端日期適應：確保取得的是精準的台灣時間
+    # 🎯 學生端日期適應：精準台北時間
     today = dt.now(tw_tz)
     _, sun_str, sat_str = get_week_info(today)
     
@@ -140,7 +140,6 @@ def teacher_dashboard():
     if INIT_ERROR: return internal_server_error(None)
     if session.get("role") != "teacher": return redirect(url_for("login"))
     
-    # 🎯 使用台灣時間計算本週與下週
     today = dt.now(tw_tz)
     next_week_date = today + timedelta(days=7)
     
