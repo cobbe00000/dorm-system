@@ -2,15 +2,14 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 import os
 import json
 import traceback
-from datetime import datetime as dt, timedelta
-from zoneinfo import ZoneInfo # 🎯 改用 Python 3 內建時區庫，Render 100% 支援不報錯
+from datetime import datetime as dt, timedelta, timezone
 
 app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 TEACHER_PWD = "0800092000"
 
-# 🎯 強制指定台北時間時區
-tw_tz = ZoneInfo('Asia/Taipei')
+# 🎯 改用 Python 內建標準 timezone 鎖定 +8 台灣時區，Render 100% 穩定開機、不需安裝外部套件
+tw_tz = timezone(timedelta(hours=8))
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -29,7 +28,8 @@ except Exception as e:
 # ==============================================================================
 
 def get_week_info(target_date):
-    """🎯 以當週週日的日期字串作為唯一的 week_id"""
+    """🎯 精準對齊台灣習慣（週日算新的一週開始）的計算公式"""
+    # weekday() 預設週一是 0，週日是 6。我們將其轉換為：週日是 0，週一是 1 ... 週六是 6
     idx = (target_date.weekday() + 1) % 7
     sun = target_date - timedelta(days=idx)
     sat = target_date + timedelta(days=(6 - idx))
@@ -103,7 +103,7 @@ def student_form():
                 })
             return jsonify({"status": "error", "message": err_msg})
 
-    # 🎯 學生端日期適應：精準台北時間
+    # 學生端日期：精準取得台灣今日
     today = dt.now(tw_tz)
     _, sun_str, sat_str = get_week_info(today)
     
