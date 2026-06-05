@@ -26,30 +26,23 @@ except Exception as e:
 
 # ==============================================================================
 
-def get_current_week_id():
-    """🎯 自動計算當下時間屬於一年中的第幾週，以此作為每週鎖定的唯一 ID (格式: YYYY-WW)"""
-    today = dt.now()
-    # 習慣上以週日為一週的開始：如果今天是一週的開始(週日為0, 週六為6)
-    # Python 的 isocalendar() 預設週一是 1，這裡我們轉換成符合台灣學校習慣的週日算新的一週
-    idx = (today.weekday() + 1) % 7
-    sun_of_this_week = today - timedelta(days=idx)
-    return sun_of_this_week.strftime("%Y-w%U")
+def get_week_info(target_date):
+    """🎯 核心計算：根據輸入的日期，計算出該日期所屬週的識別碼(week_id)、週日、週六日期"""
+    idx = (target_date.weekday() + 1) % 7
+    sun = target_date - timedelta(days=idx)
+    sat = target_date + timedelta(days=(6 - idx))
+    week_id = sun.strftime("%Y-w%U")
+    return week_id, sun.strftime("%Y-%m-%d"), sat.strftime("%Y-%m-%d")
 
-def get_deadline():
-    """🎯 讀取『本週』的截止日期，如果本週老師還沒設定，預設就是這週六的 23:59 (即自動解除上一週的鎖)"""
-    week_id = get_current_week_id()
+def get_deadline_by_week(week_id, default_sat_str):
+    """🎯 精準讀取某一週的截止日期，若資料庫沒設定，預設為該週六 23:59"""
     try:
         res = supabase.table("settings").select("*").eq("week_id", week_id).execute()
         if res.data:
             return res.data[0].get("deadline")
     except:
         pass
-    
-    # 如果進入了新的一週，而老師還沒設定截止，預設就給他本週六的最後一秒（等於對新的一週自動開放登記）
-    today = dt.now()
-    idx = (today.weekday() + 1) % 7
-    sat_of_this_week = today + timedelta(days=(6 - idx))
-    return sat_of_this_week.strftime("%Y-%m-%d 23:59")
+    return f"{default_sat_str} 23:59"
 
 # ==============================================================================
 
@@ -117,42 +110,35 @@ def student_form():
             })
         except Exception as e:
             err_msg = str(e)
-            # 🎯 學生端：當撞到 RLS 週鎖定限制時，噴出三語溫馨提示
             if "row-level security" in err_msg or "42501" in err_msg:
                 multilingual_msg = (
                     "Waktu pendaftaran telah habis, silakan hubungi guru secara langsung!\n"
                     "Thời gian đăng ký đã hết, vui lòng gặp trực tiếp giáo viên để đăng ký!\n"
                     "⚠️ 登記時間已過，請親自找老師登記！"
                 )
-                return jsonify({
-                    "status": "error", 
-                    "message": multilingual_msg
-                })
+                return jsonify({"status": "error", "message": multilingual_msg})
             return jsonify({"status": "error", "message": err_msg})
 
-    # 🎯 自動計算學生「今天登入時」所在的本週一到週日範圍，供前端畫面的日期做自動限制與顯示
+    # 🎯 學生端：自動調整顯示日期
     today = dt.now()
-    idx = (today.weekday() + 1) % 7
-    sun = (today - timedelta(days=idx)).strftime("%Y-%m-%d")
-    sat = (today + timedelta(days=(6 - idx))).strftime("%Y-%m-%d")
+    _, sun_str, sat_str = get_week_info(today)
     
     return render_template("student.html", 
                            student_id=session.get("student_id"), 
                            student_name=session.get("student_name"),
-                           week_start=sun,
-                           week_end=sat)
+                           week_start=sun_str,
+                           week_end=sat_str)
 
 @app.route("/teacher/save_settings", methods=["POST"])
 def save_settings():
     if INIT_ERROR: return internal_server_error(None)
     if session.get("role") != "teacher": return redirect(url_for("login"))
     
+    target_week_id = request.form.get("week_id")
     new_dl = f"{request.form.get('deadline_date')} {request.form.get('deadline_time')}"
-    week_id = get_current_week_id()
     
     try:
-        # 將設定綁定在本週的 week_id 上
-        supabase.table("settings").upsert({"id": 1, "week_id": week_id, "deadline": new_dl}, on_conflict="id").execute()
+        supabase.table("settings").upsert({"week_id": target_week_id, "deadline": new_dl}).execute()
     except Exception as e:
         err_msg = str(e)
         if "row-level security" in err_msg or "42501" in err_msg:
@@ -164,18 +150,13 @@ def save_settings():
             """
     return redirect(url_for("teacher_dashboard"))
 
-# 🎯 新增功能：老師一鍵主動「解鎖本週」的功能路徑
-@app.route("/teacher/unlock_current_week", methods=["POST"])
-def unlock_current_week():
+@app.route("/teacher/unlock_week", methods=["POST"])
+def unlock_week():
     if session.get("role") != "teacher": return redirect(url_for("login"))
-    week_id = get_current_week_id()
-    # 做法：直接把截止時間設到遙遠的未來或這週的最後一秒，讓 RLS 安全檢查直接放行
-    today = dt.now()
-    idx = (today.weekday() + 1) % 7
-    sat_of_this_week = today + timedelta(days=(6 - idx))
-    far_deadline = sat_of_this_week.strftime("%Y-%m-%d 23:59")
+    target_week_id = request.form.get("week_id")
+    far_deadline = request.form.get("default_sat") + " 23:59"
     try:
-        supabase.table("settings").upsert({"id": 1, "week_id": week_id, "deadline": far_deadline}, on_conflict="id").execute()
+        supabase.table("settings").upsert({"week_id": target_week_id, "deadline": far_deadline}).execute()
     except:
         pass
     return redirect(url_for("teacher_dashboard"))
@@ -198,9 +179,16 @@ def teacher_dashboard():
     if INIT_ERROR: return internal_server_error(None)
     if session.get("role") != "teacher": return redirect(url_for("login"))
     
-    deadline = get_deadline()
-    res = supabase.table("applications").select("*").execute()
+    today = dt.now()
+    next_week_date = today + timedelta(days=7)
     
+    this_week_id, this_sun, this_sat = get_week_info(today)
+    next_week_id, next_sun, next_sat = get_week_info(next_week_date)
+    
+    this_deadline = get_deadline_by_week(this_week_id, this_sat)
+    next_deadline = get_deadline_by_week(next_week_id, next_sat)
+    
+    res = supabase.table("applications").select("*").execute()
     apps = []
     for item in (res.data if res.data else []):
         try: full_data = json.loads(item["details"])
@@ -212,12 +200,21 @@ def teacher_dashboard():
         full_data["teacher_status"] = item.get("teacher_status", "待審核")
         apps.append(full_data)
         
-    return render_template("teacher.html", applications=sorted(apps, key=lambda x: x.get("student_id", "")), settings={"deadline": deadline})
+    week_settings = {
+        "this_week": {"id": this_week_id, "range": f"{this_sun} ~ {this_sat}", "deadline": this_deadline, "sat": this_sat},
+        "next_week": {"id": next_week_id, "range": f"{next_sun} ~ {next_sat}", "deadline": next_deadline, "sat": next_sat}
+    }
+        
+    return render_template("teacher.html", 
+                           applications=sorted(apps, key=lambda x: x.get("student_id", "")), 
+                           week_settings=week_settings)
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
+# 🎯 這裡做了安全修改：移除了 Gunicorn 依賴，改用內建標準啟動
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
