@@ -1,41 +1,15 @@
 <div style="font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f9f9f9; border-radius: 8px; border: 1px solid #ddd;">
-    <h3 style="color: #333; margin-top: 0; border-bottom: 2px solid #1890ff; padding-bottom: 8px;">📅 宿舍登記截止時間管理（分週獨立設定）</h3>
+    <h3 style="color: #333; margin-top: 0; border-bottom: 2px solid #1890ff; padding-bottom: 8px;">📅 宿舍登記截止時間管理</h3>
 
-    <div style="background: #fff; padding: 15px; margin-bottom: 15px; border-radius: 6px; border-left: 5px solid #1890ff; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-        <strong style="font-size: 16px; color: #1890ff;">【本週控制區】週別識別：{{ week_settings.this_week.id }} ({{ week_settings.this_week.range }})</strong>
-        <p style="margin: 8px 0; color: #666;">目前設定的截止時間為：<span style="color: #ff4d4f; font-weight: bold;">{{ week_settings.this_week.deadline }}</span></p>
+    <div style="background: #fff; padding: 15px; border-radius: 6px; border-left: 5px solid #1890ff; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+        <strong style="font-size: 16px; color: #1890ff;">【全域時間控制】</strong>
+        <p style="margin: 8px 0; color: #666;">目前系統設定的截止時間為：<span style="color: #ff4d4f; font-weight: bold;">{{ settings.deadline }}</span></p>
         
         <form action="/teacher/save_settings" method="POST" style="display: inline-block; margin-top: 5px;">
-            <input type="hidden" name="week_id" value="{{ week_settings.this_week.id }}">
             <label>變更截止日期：</label>
             <input type="date" name="deadline_date" required style="padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
             <input type="time" name="deadline_time" required style="padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
-            <button type="submit" style="background: #1890ff; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">儲存本週設定</button>
-        </form>
-
-        <form action="/teacher/unlock_week" method="POST" style="display: inline-block; margin-left: 10px;">
-            <input type="hidden" name="week_id" value="{{ week_settings.this_week.id }}">
-            <input type="hidden" name="default_sat" value="{{ week_settings.this_week.sat }}">
-            <button type="submit" onclick="return confirm('確定要手動解除本週鎖定，重新開放登記嗎？')" style="background: #52c41a; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">🔓 解除本週鎖定</button>
-        </form>
-    </div>
-
-    <div style="background: #fff; padding: 15px; border-radius: 6px; border-left: 5px solid #722ed1; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-        <strong style="font-size: 16px; color: #722ed1;">【下週預部署區】週別識別：{{ week_settings.next_week.id }} ({{ week_settings.next_week.range }})</strong>
-        <p style="margin: 8px 0; color: #666;">目前設定的截止時間為：<span style="color: #ff4d4f; font-weight: bold;">{{ week_settings.next_week.deadline }}</span></p>
-        
-        <form action="/teacher/save_settings" method="POST" style="display: inline-block; margin-top: 5px;">
-            <input type="hidden" name="week_id" value="{{ week_settings.next_week.id }}">
-            <label>提早設定截止：</label>
-            <input type="date" name="deadline_date" required style="padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="time" name="deadline_time" required style="padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
-            <button type="submit" style="background: #722ed1; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">儲存下週設定</button>
-        </form>
-
-        <form action="/teacher/unlock_week" method="POST" style="display: inline-block; margin-left: 10px;">
-            <input type="hidden" name="week_id" value="{{ week_settings.next_week.id }}">
-            <input type="hidden" name="default_sat" value="{{ week_settings.next_week.sat }}">
-            <button type="submit" onclick="return confirm('確定要解除下週預設鎖定嗎？')" style="background: #52c41a; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">🔓 解除下週鎖定</button>
+            <button type="submit" style="background: #1890ff; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">儲存新截止時間</button>
         </form>
     </div>
 </div>
