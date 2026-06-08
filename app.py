@@ -6,7 +6,6 @@ from datetime import datetime as dt
 app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 
-# 🎯 修正1：自動偵測目前專案路徑，不綁死 C 槽，確保在雲端 Linux 平台能正常讀取
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "data.json")
 
@@ -14,12 +13,15 @@ TEACHER_PWD = "0800092000"
 
 def load_data():
     if not os.path.exists(DB_FILE):
-        return {"settings": {"deadline": "2026-12-31 23:59"}, "applications": []}
+        return {"system_locked": False, "applications": []}
     try:
         with open(DB_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            if "system_locked" not in data:
+                data["system_locked"] = False
+            return data
     except Exception:
-        return {"settings": {"deadline": "2026-12-31 23:59"}, "applications": []}
+        return {"system_locked": False, "applications": []}
 
 def save_data(data):
     with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -37,16 +39,16 @@ def login():
             else:
                 return render_template("login.html", error="老師密碼錯誤！")
         else:
+            # 🎯 學生登入時檢查是否被一鍵鎖定
+            db = load_data()
+            if db.get("system_locked", False):
+                return render_template("login.html", error="系統目前處於鎖定狀態，暫不開放填報！")
+
             student_id = request.form.get("student_id", "").strip()
             student_name = request.form.get("student_name", "").strip()
             
             if not student_id or not student_name:
                 return render_template("login.html", error="學號與姓名不能為空！")
-                
-            db = load_data()
-            deadline_str = db["settings"].get("deadline", "2026-12-31 23:59")
-            if dt.now() > dt.strptime(deadline_str, "%Y-%m-%d %H:%M"):
-                return render_template("login.html", error="申請已經結束，下次請準時！")
                 
             session["role"] = "student"
             session["student_id"] = student_id
@@ -60,13 +62,16 @@ def student_form():
     if session.get("role") != "student":
         return redirect(url_for("login"))
         
-    if request.method == "POST":
-        db = load_data()
-        
-        deadline_str = db["settings"].get("deadline", "2026-12-31 23:59")
-        if dt.now() > dt.strptime(deadline_str, "%Y-%m-%d %H:%M"):
-            return jsonify({"status": "error", "message": "申請已經結束，下次請準時！"})
+    # 🎯 防止學生繞過前端直接送出資料，後端再次檢查鎖定狀態
+    db = load_data()
+    if db.get("system_locked", False):
+        if request.method == "POST":
+            return jsonify({"status": "error", "message": "系統目前處於鎖定狀態，暫不開放填報！"})
+        else:
+            session.clear()
+            return redirect(url_for("login"))
 
+    if request.method == "POST":
         form_data = request.form.to_dict()
         form_data["student_id"] = session["student_id"]
         form_data["student_name"] = session["student_name"]
@@ -84,7 +89,6 @@ def student_form():
             
         form_data["target_date"] = target_date
 
-        # 保留你原本的防覆蓋邏輯
         db["applications"] = [
             a for a in db["applications"] 
             if not (a["student_id"] == session["student_id"] and a.get("target_date") == target_date)
@@ -103,16 +107,7 @@ def teacher_dashboard():
         return redirect(url_for("login"))
     db = load_data()
     apps = sorted(db["applications"], key=lambda x: x["student_id"])
-    return render_template("teacher.html", applications=apps, settings=db["settings"])
-
-@app.route("/teacher/save_settings", methods=["POST"])
-def save_settings():
-    if session.get("role") != "teacher":
-        return jsonify({"status": "error"})
-    db = load_data()
-    db["settings"]["deadline"] = f"{request.form.get('deadline_date')} {request.form.get('deadline_time')}"
-    save_data(db)
-    return redirect(url_for("teacher_dashboard"))
+    return render_template("teacher.html", applications=apps, system_locked=db.get("system_locked", False))
 
 @app.route("/teacher/update_status", methods=["POST"])
 def update_status():
@@ -129,11 +124,31 @@ def update_status():
     save_data(db)
     return jsonify({"status": "success"})
 
-@app.route("/teacher/confirm_week", methods=["POST"])
-def confirm_week():
+@app.route("/teacher/delete_application", methods=["POST"])
+def delete_application():
+    if session.get("role") != "teacher":
+        return jsonify({"status": "error", "message": "權限不足"})
+    student_id = request.form.get("student_id")
+    target_date = request.form.get("target_date")
+    
+    db = load_data()
+    db["applications"] = [
+        a for a in db["applications"] 
+        if not (a["student_id"] == student_id and a.get("target_date") == target_date)
+    ]
+    save_data(db)
+    return jsonify({"status": "success", "message": "🗑️ 該筆申請資料已成功刪除！"})
+
+# 🎯 新增：一鍵切換鎖定狀態的路由
+@app.route("/teacher/toggle_lock", methods=["POST"])
+def toggle_lock():
     if session.get("role") != "teacher":
         return jsonify({"status": "error"})
-    return jsonify({"status": "success", "message": "🔒 本週假單已鎖定！自動化排隊上傳學校網站中..."})
+    db = load_data()
+    # 反轉目前的鎖定狀態
+    db["system_locked"] = not db.get("system_locked", False)
+    save_data(db)
+    return jsonify({"status": "success", "system_locked": db["system_locked"]})
 
 @app.route("/logout")
 def logout():
