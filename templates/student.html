@@ -135,7 +135,6 @@
     </div>
 
     <script>
-        // 設定今天的預設日期
         const today = new Date().toISOString().split('T')[0];
         document.querySelectorAll('input[type="date"]').forEach(el => el.value = today);
 
@@ -165,7 +164,12 @@
             .then(res => res.json())
             .then(data => {
                 alert(data.message);
-                if(data.status === 'success') { window.location.reload(); }
+                if(data.status === 'success') { 
+                    window.location.reload(); 
+                } else if(data.message.includes("鎖定")) {
+                    // 🎯 若被後端判定系統鎖定，自動重新整理回登入頁
+                    window.location.href = "/";
+                }
             });
         }
     </script>
