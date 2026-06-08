@@ -2,164 +2,253 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>宿舍管理系統 - 老師後台</title>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
-        .container { max-width: 1100px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
-        
-        /* 區塊樣式 */
-        .control-box { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 30px; text-align: center; }
-        .status-badge { padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 16px; color: white; display: inline-block; margin-bottom: 15px; }
-        .btn-toggle { border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; color: white; transition: 0.2s; margin: 5px; }
-        
-        /* 表格樣式 */
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #007bff; color: white; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        tr:hover { background-color: #f1f1f1; }
-        
-        .status-select { padding: 6px; border-radius: 4px; border: 1px solid #ccc; font-weight: bold; }
-        .status-pending { color: #8c8c8c; background: #f5f5f5; }
-        .status-approved { color: #52c41a; background: #f6ffed; }
-        .status-rejected { color: #ff4d4f; background: #fff1f0; }
-        
-        .header-box { display: flex; justify-content: space-between; align-items: center; }
-        .btn-logout { background: #ff4d4f; color: white; text-decoration: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宿舍填報系統 - 老師審核端</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-
-<div class="container">
-    <div class="header-box">
-        <h2>👨‍🏫 宿舍假單審查後台</h2>
-        <a href="/logout" class="btn-logout">登出系統</a>
-    </div>
-
-    <div class="control-box">
-        <h3 style="margin-top:0; color:#555;">⚙️ 系統一鍵控制中心</h3>
-        <div>
-            目前學生登記狀態：
-            {% if settings.system_status == 'open' %}
-                <span class="status-badge" style="background: #52c41a;">🟢 開放登記中</span>
-            {% else %}
-                <span class="status-badge" style="background: #ff4d4f;">🔴 系統已鎖定</span>
-            {% endif %}
-        </div>
+<body class="bg-slate-50 min-h-screen p-6">
+    <div class="max-w-7xl mx-auto space-y-6">
         
-        <div style="margin-top: 10px;">
-            <form action="/teacher/toggle_status" method="POST" style="display: inline-block;">
-                {% if settings.system_status == 'open' %}
-                    <button type="submit" class="btn-toggle" onclick="return confirm('確定要立刻鎖定系統，禁止學生登記嗎？')" style="background: #ff4d4f; box-shadow: 0 2px 4px rgba(255,77,79,0.3);">
-                        🔒 一鍵鎖定系統
-                    </button>
-                {% else %}
-                    <button type="submit" class="btn-toggle" style="background: #52c41a; box-shadow: 0 2px 4px rgba(82,196,26,0.3);">
-                        🔓 一鍵開啟登記
-                    </button>
-                {% endif %}
-            </form>
+        <div class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800">👨‍🏫 宿舍填報週課表審核大總表</h1>
+                <p class="text-sm text-slate-500 mt-1">💡 提示：點擊表格中的【工讀】或【省親】格子，即可在下方查看該學生的完整申請細節！</p>
+            </div>
+            <a href="/logout" class="bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 px-4 py-2 rounded-xl text-sm font-semibold">安全登出</a>
+        </div>
 
-            <button class="btn-toggle" onclick="triggerAutoRegister()" style="background: #1890ff; box-shadow: 0 2px 4px rgba(24,144,255,0.3);">
-                🚀 一鍵幫我登記 (自動上傳學校網站)
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3">
+                <h3 class="text-sm font-bold text-slate-700">⏱️ 設定學生申請截止時間</h3>
+                <form action="/teacher/save_settings" method="POST" class="flex gap-2">
+                    <input type="date" name="deadline_date" required class="border px-3 py-2 rounded-xl text-sm">
+                    <input type="time" name="deadline_time" required class="border px-3 py-2 rounded-xl text-sm">
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700">儲存時限</button>
+                </form>
+                <p class="text-xs text-red-500 font-medium">目前系統設定截止於：{{ settings.deadline }}</p>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3">
+                <h3 class="text-sm font-bold text-slate-700">📅 請選擇要申請當週的【星期一】</h3>
+                <input type="date" id="week_monday" onchange="updateWeekDates()" class="border px-4 py-2 rounded-xl text-sm bg-slate-50 font-bold text-blue-600">
+            </div>
+        </div>
+
+        <div id="detail-panel" class="hidden bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 p-5 rounded-2xl shadow-inner space-y-2">
+            <div class="flex justify-between items-center border-b border-blue-200 pb-2">
+                <h3 class="text-base font-bold text-slate-800">📋 學生申請詳細資料面板</h3>
+                <button onclick="document.getElementById('detail-panel').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 font-bold">✕ 關閉</button>
+            </div>
+            <div id="detail-content" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-700 pt-1"></div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-800 text-white text-xs font-bold tracking-wider">
+                            <th class="p-4 w-24">學生學號</th>
+                            <th class="p-4 w-24">姓名</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-mon">一</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-tue">二</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-wed">三</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-thu">四</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-fri">五</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-sat">六</th>
+                            <th class="p-4 text-center border-l border-slate-700 bg-slate-700" id="th-sun">日</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y text-sm text-slate-700" id="table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="flex justify-end pt-4">
+            <button onclick="triggerAutomation()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg text-lg transition duration-150 active:scale-95">
+                🔒 本週確定無誤，送出自動化填報學校網頁
             </button>
         </div>
     </div>
 
-    <h3 style="color: #333; margin-bottom: 5px;">📋 學生假單清單</h3>
-    <p style="color: #666; margin-top: 0;">目前共有 {{ applications|length }} 筆申請資料 (依學號排序)</p>
-    
-    <table>
-        <thead>
-            <tr>
-                <th>學號</th>
-                <th>姓名</th>
-                <th>假別</th>
-                <th>主要日期 (目標日期)</th>
-                <th>詳細填報內容</th>
-                <th>填單時間</th>
-                <th>審核狀態</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for app in applications %}
-            <tr>
-                <td><strong>{{ app.student_id }}</strong></td>
-                <td>{{ app.student_name }}</td>
-                <td>
-                    <span style="padding: 3px 8px; border-radius: 4px; font-weight: bold; 
-                        {% if app.leave_type == '工讀' %} background: #e6f7ff; color: #1890ff;
-                        {% elif app.leave_type == '省親' %} background: #f6ffed; color: #52c41a;
-                        {% else %} background: #fff7e6; color: #fa8c16; {% endif %}">
-                        {{ app.leave_type }}
-                    </span>
-                </td>
-                <td style="color: #d4380d; font-weight: bold;">{{ app.target_date }}</td>
-                <td>
-                    <div style="font-size: 13px; color: #555; max-width: 400px; word-break: break-all;">
-                        {% if app.leave_type == '工讀' %}
-                            📍 地點: {{ app.work_place }} | ⏰ 時間: {{ app.work_time_start }}~{{ app.work_time_end }}
-                        {% elif app.leave_type == '省親' %}
-                            🏠 期間: {{ app.fam_start_date }} ~ {{ app.fam_end_date }}
-                        {% elif app.leave_type == '回國' %}
-                            ✈️ 出國: {{ app.go_date }} | 🛬 返台: {{ app.back_date }}
-                        {% endif %}
-                    </div>
-                </td>
-                <td style="font-size: 12px; color: #999;">{{ app.timestamp }}</td>
-                <td>
-                    <select class="status-select {% if app.teacher_status == '已核准' %}status-approved{% elif app.teacher_status == '不核准' %}status-rejected{% else %}status-pending{% endif %}" 
-                            onchange="updateStatus('{{ app.student_id }}', '{{ app.target_date }}', this)">
-                        <option value="待審核" {% if app.teacher_status == '待審核' %}selected{% endif %}>⏳ 待審核</option>
-                        <option value="已核准" {% if app.teacher_status == '已核准' %}selected{% endif %}>✅ 已核准</option>
-                        <option value="不核准" {% if app.teacher_status == '不核准' %}selected{% endif %}>❌ 不核准</option>
-                    </select>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="7" style="text-align: center; color: #999; padding: 30px;">目前雲端資料庫內尚無任何學生申請資料。</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+    <script>
+        const rawApplications = {{ applications | tojson | safe }};
 
-<script>
-function updateStatus(studentId, targetDate, selectElement) {
-    const status = selectElement.value;
-    selectElement.className = "status-select";
-    if (status === '已核准') selectElement.classList.add('status-approved');
-    else if (status === '不核准') selectElement.classList.add('status-rejected');
-    else selectElement.classList.add('status-pending');
+        function getRecentMonday() {
+            let d = new Date();
+            let day = d.getDay(), diff = d.getDate() - day + (day == 0 ? -6 : 1);
+            return new Date(d.setDate(diff)).toISOString().split('T')[0];
+        }
+        document.getElementById('week_monday').value = getRecentMonday();
 
-    const formData = new FormData();
-    formData.append('student_id', studentId);
-    formData.append('target_date', targetDate);
-    formData.append('status', status);
+        // 完全保留你原本的所有時間計算法則
+        function calculateStatus(app, checkDateStr) {
+            if (app.leave_type === "工讀") {
+                if (app.work_date !== checkDateStr) return null;
+                let place = app.work_place;
+                let sTime = app.start_time; 
+                let bTime = app.back_time;
+                let early = (place === "萬豪") ? (sTime < "09:30" ? "免早點" : "要早點") : (sTime < "09:00" ? "免早點" : "要早點");
+                let late = bTime < "21:30" ? "要晚點" : "免晚點";
+                return `工讀(${early},${late})`;
+            }
+            
+            if (app.leave_type === "省親") {
+                let startD = app.fam_start_date;
+                let endD = app.fam_end_date;
+                let sTime = app.fam_start_time;
+                if (checkDateStr < startD || checkDateStr > endD) return null;
+                if (checkDateStr === startD) {
+                    return `省親(${sTime > "07:30" ? "要早點" : "免早點"},免晚點)`;
+                }
+                if (checkDateStr === endD) {
+                    return `省親(免早點,要晚點)`;
+                }
+                return "省親(免早點,免晚點)";
+            }
+            
+            if (app.leave_type === "回國") {
+                if (checkDateStr < app.go_date || checkDateStr > app.back_country_date) return null;
+                return app.teacher_status || "未設定";
+            }
+            return null;
+        }
 
-    fetch('/teacher/update_status', { method: 'POST', body: formData })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status !== 'success') alert('🚨 狀態更新失敗！');
-    });
-}
+        // 🎯 修正2：改用安全 Index 抓取資料，100% 避免 JSON 字串雙引號破壞 HTML 結構導致網頁讀不出來
+        function showDetailByIndex(index) {
+            const app = rawApplications[index];
+            const panel = document.getElementById('detail-panel');
+            const content = document.getElementById('detail-content');
+            
+            panel.classList.remove('hidden');
+            
+            let html = `
+                <div>
+                    <p class="mb-1"><strong>👤 學生基本資料：</strong> <span class="text-blue-700 font-bold">${app.student_name} (${app.student_id})</span></p>
+                    <p class="mb-1"><strong>📌 申請假別：</strong> <span class="bg-indigo-600 text-white px-2 py-0.5 text-xs rounded font-bold">${app.leave_type}</span></p>
+                    <p class="mb-1"><strong>⏱️ 學生手機送出時間：</strong> <span class="text-gray-500">${app.timestamp || '無紀錄'}</span></p>
+                </div>
+                <div class="bg-white p-3 rounded-xl border border-blue-100 space-y-1">
+                    <p class="text-xs font-bold text-indigo-500 uppercase tracking-wider border-b pb-1 mb-1">📋 學生填報之原始詳細欄位</p>
+            `;
 
-// 🎯 觸發一鍵自動登記上傳的功能
-function triggerAutoRegister() {
-    if(!confirm('確定要啟動自動化排隊登記，將所有假單同步到學校網站嗎？')) return;
-    
-    fetch('/teacher/confirm_week', { method: 'POST' })
-    .then(response => response.json())
-    .then(data => {
-        alert(data.message);
-    })
-    .catch(err => {
-        alert('🚨 啟動自動化失敗，請檢查連線！');
-    });
-}
-</script>
+            if (app.leave_type === "工讀") {
+                html += `
+                    <p><strong>工讀日期：</strong> ${app.work_date}</p>
+                    <p><strong>工讀商家地點：</strong> <span class="text-amber-700 font-bold">${app.work_place}</span></p>
+                    <p><strong>🪪 上班打卡時間：</strong> ${app.start_time}</p>
+                    <p><strong>🪪 下班打卡時間：</strong> ${app.end_time}</p>
+                    <p><strong>🏠 預計返回宿舍時間：</strong> <span class="text-red-600 font-bold">${app.back_time}</span></p>
+                `;
+            } else if (app.leave_type === "省親") {
+                html += `
+                    <p><strong>省親起迄：</strong> ${app.fam_start_date} (${app.fam_start_time}) ～ ${app.fam_end_date} (${app.fam_end_time})</p>
+                    <p><strong>省親對象姓名：</strong> ${app.fam_name}</p>
+                    <p><strong>與學生關係：</strong> ${app.fam_rel}</p>
+                    <p><strong>📞 聯絡電話：</strong> <a href="tel:${app.fam_phone}" class="text-blue-600 underline">${app.fam_phone}</a></p>
+                    <p><strong>📍 省親目的地地址：</strong> ${app.fam_addr}</p>
+                `;
+            } else if (app.leave_type === "回國") {
+                html += `
+                    <p><strong>出發日期：</strong> ${app.go_date} (${app.go_time})</p>
+                    <p><strong>🛫 出發機場：</strong> ${app.airport}</p>
+                    <p><strong>回來日期：</strong> ${app.back_country_date} (${app.back_country_time})</p>
+                `;
+            }
 
+            html += `</div>`;
+            content.innerHTML = html;
+            panel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function updateWeekDates() {
+            let mondayStr = document.getElementById('week_monday').value;
+            if(!mondayStr) return;
+            
+            let monday = new Date(mondayStr);
+            let weekDaysLabels = ["一", "二", "三", "四", "五", "六", "日"];
+            let dateStrings = [];
+            
+            for(let i=0; i<7; i++) {
+                let nextDay = new Date(monday);
+                nextDay.setDate(monday.getDate() + i);
+                dateStrings.push(nextDay.toISOString().split('T')[0]);
+                
+                let m = nextDay.getMonth() + 1;
+                let d = nextDay.getDate();
+                document.getElementById(['th-mon', 'th-tue', 'th-wed', 'th-thu', 'th-fri', 'th-sat', 'th-sun'][i]).innerHTML = `${weekDaysLabels[i]}<br><span class="text-[10px] font-normal opacity-80">${m}/${d}</span>`;
+            }
+
+            let studentsMap = {};
+            rawApplications.forEach((app, index) => {
+                if(!studentsMap[app.student_id]) {
+                    studentsMap[app.student_id] = { id: app.student_id, name: app.student_name, list: [] };
+                }
+                studentsMap[app.student_id].list.push({data: app, originalIndex: index});
+            });
+
+            let sortedStudents = Object.values(studentsMap).sort((a,b) => a.id.localeCompare(b.id));
+            let tbody = document.getElementById('table-body');
+            tbody.innerHTML = "";
+
+            sortedStudents.forEach(student => {
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                
+                let html = `
+                    <td class="p-4 font-mono font-bold text-blue-600">${student.id}</td>
+                    <td class="p-4 font-semibold">${student.name}</td>
+                `;
+
+                for(let i=0; i<7; i++) {
+                    let currentDate = dateStrings[i];
+                    let cellContent = `<span class="text-gray-400 block text-center py-1">留宿</span>`;
+                    
+                    for(let item of student.list) {
+                        let app = item.data;
+                        let idx = item.originalIndex;
+                        let status = calculateStatus(app, currentDate);
+                        if(status) {
+                            if(status.includes("工讀")) {
+                                cellContent = `<button onclick="showDetailByIndex(${idx})" class="w-full bg-amber-100 hover:bg-amber-200 text-amber-800 px-1 py-1.5 rounded border border-amber-300 block font-bold text-center text-[11px] transition shadow-sm">${status}</button>`;
+                            } else if(status.includes("省親")) {
+                                cellContent = `<button onclick="showDetailByIndex(${idx})" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 px-1 py-1.5 rounded border border-blue-300 block font-bold text-center text-[11px] transition shadow-sm">${status}</button>`;
+                            } else {
+                                cellContent = `
+                                    <div class="space-y-1">
+                                        <button onclick="showDetailByIndex(${idx})" class="w-full bg-purple-100 hover:bg-purple-200 text-purple-800 p-0.5 rounded border border-purple-300 block font-bold text-center text-[10px]">🔍 看回國時間</button>
+                                        <select onchange="updateCountryStatus('${student.id}', '${currentDate}', this.value)" class="border rounded bg-white text-[11px] p-0.5 w-full">
+                                            <option value="未設定" ${status==='未設定'?'selected':''}>未設定</option>
+                                            <option value="回國(免早點,免晚點)" ${status==='回國(免早點,免晚點)'?'selected':''}>回國(免早免晚)</option>
+                                            <option value="回國(要早點,免晚點)" ${status==='回國(要早點,免晚點)'?'selected':''}>回國(要早免晚)</option>
+                                            <option value="回國(免早點,要晚點)" ${status==='回國(免早點,要晚點)'?'selected':''}>回國(免早要晚)</option>
+                                        </select>
+                                    </div>`;
+                            }
+                            break; 
+                        }
+                    }
+                    html += `<td class="p-2 border-l">${cellContent}</td>`;
+                }
+                tr.innerHTML = html;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateCountryStatus(studentId, targetDate, val) {
+            let fd = new FormData();
+            fd.append('student_id', studentId);
+            fd.append('target_date', targetDate);
+            fd.append('status', val);
+            fetch('/teacher/update_status', { method: 'POST', body: fd });
+        }
+
+        function triggerAutomation() {
+            fetch('/teacher/confirm_week', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => { alert(data.message); });
+        }
+
+        window.onload = updateWeekDates;
+    </script>
 </body>
 </html>
