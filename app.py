@@ -206,7 +206,7 @@ def submit_to_school():
     try:
         with sync_playwright() as p:
             # 這裡為了整合進網頁後端，保持 headless=False 可以讓你在伺服器端親眼看見它跑
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=True)
             context = browser.new_context()
             page = context.new_page()
             
