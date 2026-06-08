@@ -12,23 +12,28 @@
         <div class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border">
             <div>
                 <h1 class="text-2xl font-bold text-slate-800">👨‍🏫 宿舍填報週課表審核大總表</h1>
-                <p class="text-sm text-slate-500 mt-1">💡 提示：點擊表格中的【工讀】或【省親】格子，即可在下方查看該學生的完整申請細節與進行刪除！</p>
+                <p class="text-sm text-slate-500 mt-1">💡 提示：點擊表格中的格子，即可在下方查看學生的完整細節並進行刪除！</p>
             </div>
             <a href="/logout" class="bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 px-4 py-2 rounded-xl text-sm font-semibold">安全登出</a>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3">
-                <h3 class="text-sm font-bold text-slate-700">📅 請選擇要申請當週的【星期一】</h3>
-                <input type="date" id="week_monday" onchange="updateWeekDates()" class="border px-4 py-2 rounded-xl text-sm bg-slate-50 font-bold text-blue-600 w-full">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-2 flex flex-col justify-center">
+                <h3 class="text-xs font-bold text-slate-500 uppercase">📅 選擇填報週別 (請選星期一)</h3>
+                <input type="date" id="week_monday" onchange="updateWeekDates()" class="border px-4 py-2.5 rounded-xl text-sm bg-slate-50 font-bold text-blue-600 w-full">
             </div>
 
-            <!-- 🎯 新增：一鍵鎖定/解鎖動態切換區塊 -->
-            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3 flex flex-col justify-center">
-                <h3 class="text-sm font-bold text-slate-700">🔒 一鍵管制學生登記權限</h3>
-                <button id="lock-btn" onclick="toggleSystemLock()" class="w-full font-bold py-3 rounded-xl shadow transition text-center text-sm active:scale-95 duration-150">
-                    <!-- 這裡會由 JS 依據後端傳來的 system_locked 狀態動態渲染 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-2 flex flex-col justify-center">
+                <h3 class="text-xs font-bold text-slate-500 uppercase">⚡ 學校自動化登記系統</h3>
+                <button onclick="submitToSchoolWebsite()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 rounded-xl shadow-md transition text-sm active:scale-95 duration-150 flex items-center justify-center gap-2">
+                    🚀 一鍵自動登記至學校網站
                 </button>
+            </div>
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-2 flex flex-col justify-center">
+                <h3 class="text-xs font-bold text-slate-500 uppercase">🔒 學生登記權限管制</h3>
+                <button id="lock-btn" onclick="toggleSystemLock()" class="w-full font-bold py-3 rounded-xl shadow transition text-center text-sm active:scale-95 duration-150">
+                    </button>
             </div>
         </div>
 
@@ -65,8 +70,8 @@
     <script>
         const rawApplications = {{ applications | tojson | safe }};
         let isSystemLocked = {{ 'true' if system_locked else 'false' }};
+        let globalWeekDates = [];
 
-        // 🎯 依據狀態渲染「一鍵鎖定/解鎖」按鈕樣式
         function renderLockButton() {
             const btn = document.getElementById('lock-btn');
             if (isSystemLocked) {
@@ -78,7 +83,6 @@
             }
         }
 
-        // 🎯 觸發切換鎖定與解鎖
         function toggleSystemLock() {
             fetch('/teacher/toggle_lock', { method: 'POST' })
             .then(res => res.json())
@@ -88,6 +92,54 @@
                     renderLockButton();
                     alert(isSystemLocked ? "🔒 系統已成功鎖定，學生端現在無法登記囉！" : "🔓 系統已成功解鎖，開放學生登記填報。");
                 }
+            });
+        }
+
+        // 打包當週數據並調用後端 Selenium
+        function submitToSchoolWebsite() {
+            let mondayStr = document.getElementById('week_monday').value;
+            if(!mondayStr) return alert("請先選取要上傳的週別！");
+
+            if(!confirm(`您確定要啟動自動化腳本，將【 ${mondayStr} 當週】的資料登記至學校網站嗎？`)) return;
+
+            let uploadPayload = [];
+            let studentsMap = {};
+            
+            rawApplications.forEach(app => {
+                if(!studentsMap[app.student_id]) {
+                    studentsMap[app.student_id] = { id: app.student_id, name: app.student_name, list: [app] };
+                } else {
+                    studentsMap[app.student_id].list.push(app);
+                }
+            });
+
+            Object.values(studentsMap).forEach(student => {
+                let studentWeekRecord = {
+                    student_id: student.id,
+                    student_name: student.name,
+                    weekly_status: {}
+                };
+
+                for(let i=0; i<7; i++) {
+                    let checkDate = globalWeekDates[i];
+                    let status = "留宿";
+                    for(let app of student.list) {
+                        let cal = calculateStatus(app, checkDate);
+                        if(cal) { status = cal; break; }
+                    }
+                    studentWeekRecord.weekly_status[checkDate] = status;
+                }
+                uploadPayload.push(studentWeekRecord);
+            });
+
+            fetch('/teacher/submit_to_school', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ monday: mondayStr, data: uploadPayload })
+            })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message);
             });
         }
 
@@ -108,21 +160,15 @@
                 let late = bTime < "21:30" ? "要晚點" : "免晚點";
                 return `工讀(${early},${late})`;
             }
-            
             if (app.leave_type === "省親") {
                 let startD = app.fam_start_date;
                 let endD = app.fam_end_date;
                 let sTime = app.fam_start_time;
                 if (checkDateStr < startD || checkDateStr > endD) return null;
-                if (checkDateStr === startD) {
-                    return `省親(${sTime > "07:30" ? "要早點" : "免早點"},免晚點)`;
-                }
-                if (checkDateStr === endD) {
-                    return `省親(免早點,要晚點)`;
-                }
+                if (checkDateStr === startD) return `省親(${sTime > "07:30" ? "要早點" : "免早點"},免晚點)`;
+                if (checkDateStr === endD) return `省親(免早點,要晚點)`;
                 return "省親(免早點,免晚點)";
             }
-            
             if (app.leave_type === "回國") {
                 if (checkDateStr < app.go_date || checkDateStr > app.back_country_date) return null;
                 return app.teacher_status || "未設定";
@@ -134,15 +180,14 @@
             const app = rawApplications[index];
             const panel = document.getElementById('detail-panel');
             const content = document.getElementById('detail-content');
-            
             panel.classList.remove('hidden');
             
             let html = `
                 <div class="flex flex-col justify-between h-full space-y-4">
                     <div>
-                        <p class="mb-1"><strong>👤 學生基本資料：</strong> <span class="text-blue-700 font-bold">${app.student_name} (${app.student_id})</span></p>
-                        <p class="mb-1"><strong>📌 申請假別：</strong> <span class="bg-indigo-600 text-white px-2 py-0.5 text-xs rounded font-bold">${app.leave_type}</span></p>
-                        <p class="mb-1"><strong>⏱️ 學生手機送出時間：</strong> <span class="text-gray-500">${app.timestamp || '無紀錄'}</span></p>
+                        <p class="mb-1"><strong>👤 學生資料：</strong> <span class="text-blue-700 font-bold">${app.student_name} (${app.student_id})</span></p>
+                        <p class="mb-1"><strong>📌 假別：</strong> <span class="bg-indigo-600 text-white px-2 py-0.5 text-xs rounded font-bold">${app.leave_type}</span></p>
+                        <p class="mb-1"><strong>⏱️ 填報時間：</strong> <span class="text-gray-500">${app.timestamp || '無紀錄'}</span></p>
                     </div>
                     <div class="pt-2">
                         <button onclick="deleteApplication('${app.student_id}', '${app.target_date}')" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow transition flex items-center gap-1">
@@ -151,52 +196,44 @@
                     </div>
                 </div>
                 <div class="bg-white p-3 rounded-xl border border-blue-100 space-y-1">
-                    <p class="text-xs font-bold text-indigo-500 uppercase tracking-wider border-b pb-1 mb-1">📋 學生填報之原始詳細欄位</p>
+                    <p class="text-xs font-bold text-indigo-500 uppercase tracking-wider border-b pb-1 mb-1">📋 填報原始欄位</p>
             `;
 
             if (app.leave_type === "工讀") {
                 html += `
                     <p><strong>工讀日期：</strong> ${app.work_date}</p>
-                    <p><strong>工讀商家地點：</strong> <span class="text-amber-700 font-bold">${app.work_place}</span></p>
-                    <p><strong>🪪 上班打卡時間：</strong> ${app.start_time}</p>
-                    <p><strong>🪪 下班打卡時間：</strong> ${app.end_time}</p>
-                    <p><strong>🏠 預計返回宿舍時間：</strong> <span class="text-red-600 font-bold">${app.back_time}</span></p>
+                    <p><strong>工讀地點：</strong> <span class="text-amber-700 font-bold">${app.work_place}</span></p>
+                    <p><strong>上下班時間：</strong> ${app.start_time} ~ ${app.end_time}</p>
+                    <p><strong>返宿時間：</strong> <span class="text-red-600 font-bold">${app.back_time}</span></p>
                 `;
             } else if (app.leave_type === "省親") {
                 html += `
-                    <p><strong>省親起迄：</strong> ${app.fam_start_date} (${app.fam_start_time}) ～ ${app.fam_end_date} (${app.fam_end_time})</p>
-                    <p><strong>省親對象姓名：</strong> ${app.fam_name}</p>
-                    <p><strong>與學生關係：</strong> ${app.fam_rel}</p>
-                    <p><strong>📞 聯絡電話：</strong> <a href="tel:${app.fam_phone}" class="text-blue-600 underline">${app.fam_phone}</a></p>
-                    <p><strong>📍 省親目的地地址：</strong> ${app.fam_addr}</p>
+                    <p><strong>省親起迄：</strong> ${app.fam_start_date} ～ ${app.fam_end_date}</p>
+                    <p><strong>聯絡人：</strong> ${app.fam_name} (${app.fam_rel})</p>
+                    <p><strong>📞 電話：</strong> ${app.fam_phone}</p>
+                    <p><strong>📍 地址：</strong> ${app.fam_addr}</p>
                 `;
             } else if (app.leave_type === "回國") {
                 html += `
-                    <p><strong>出發日期：</strong> ${app.go_date} (${app.go_time})</p>
-                    <p><strong>🛫 出發機場：</strong> ${app.airport}</p>
-                    <p><strong>回來日期：</strong> ${app.back_country_date} (${app.back_country_time})</p>
+                    <p><strong>出發：</strong> ${app.go_date} (${app.go_time}) | <strong>機場：</strong> ${app.airport}</p>
+                    <p><strong>回台：</strong> ${app.back_country_date} (${app.back_country_time})</p>
                 `;
             }
-
             html += `</div>`;
             content.innerHTML = html;
             panel.scrollIntoView({ behavior: 'smooth' });
         }
 
         function deleteApplication(studentId, targetDate) {
-            if (!confirm("⚠️ 確定要刪除這筆請假填報紀錄嗎？此動作將無法復原。")) return;
-            
+            if (!confirm("⚠️ 確定要刪除這筆請假填報紀錄嗎？")) return;
             let fd = new FormData();
             fd.append('student_id', studentId);
             fd.append('target_date', targetDate);
-            
             fetch('/teacher/delete_application', { method: 'POST', body: fd })
             .then(res => res.json())
             .then(data => {
                 alert(data.message);
-                if (data.status === 'success') {
-                    window.location.reload();
-                }
+                window.location.reload();
             });
         }
 
@@ -206,12 +243,13 @@
             
             let monday = new Date(mondayStr);
             let weekDaysLabels = ["一", "二", "三", "四", "五", "六", "日"];
-            let dateStrings = [];
+            globalWeekDates = [];
             
             for(let i=0; i<7; i++) {
                 let nextDay = new Date(monday);
                 nextDay.setDate(monday.getDate() + i);
-                dateStrings.push(nextDay.toISOString().split('T')[0]);
+                let dateStr = nextDay.toISOString().split('T')[0];
+                globalWeekDates.push(dateStr);
                 
                 let m = nextDay.getMonth() + 1;
                 let d = nextDay.getDate();
@@ -240,7 +278,7 @@
                 `;
 
                 for(let i=0; i<7; i++) {
-                    let currentDate = dateStrings[i];
+                    let currentDate = globalWeekDates[i];
                     let cellContent = `<span class="text-gray-400 block text-center py-1">留宿</span>`;
                     
                     for(let item of student.list) {
@@ -255,7 +293,7 @@
                             } else {
                                 cellContent = `
                                     <div class="space-y-1">
-                                        <button onclick="showDetailByIndex(${idx})" class="w-full bg-purple-100 hover:bg-purple-200 text-purple-800 p-0.5 rounded border border-purple-300 block font-bold text-center text-[10px]">🔍 看回國時間</button>
+                                        <button onclick="showDetailByIndex(${idx})" class="w-full bg-purple-100 hover:bg-purple-200 text-purple-800 p-0.5 rounded border border-purple-300 block font-bold text-center text-[10px]">🔍 看時間</button>
                                         <select onchange="updateCountryStatus('${student.id}', '${currentDate}', this.value)" class="border rounded bg-white text-[11px] p-0.5 w-full">
                                             <option value="未設定" ${status==='未設定'?'selected':''}>未設定</option>
                                             <option value="回國(免早點,免晚點)" ${status==='回國(免早點,免晚點)'?'selected':''}>回國(免早免晚)</option>
