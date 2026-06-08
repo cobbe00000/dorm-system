@@ -12,25 +12,23 @@
         <div class="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border">
             <div>
                 <h1 class="text-2xl font-bold text-slate-800">👨‍🏫 宿舍填報週課表審核大總表</h1>
-                <p class="text-sm text-slate-500 mt-1">💡 提示：點擊表格中的【工讀】或【省親】格子，即可在下方查看該學生的完整申請細節！</p>
+                <p class="text-sm text-slate-500 mt-1">💡 提示：點擊表格中的【工讀】或【省親】格子，即可在下方查看該學生的完整申請細節與進行刪除！</p>
             </div>
             <a href="/logout" class="bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 px-4 py-2 rounded-xl text-sm font-semibold">安全登出</a>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3">
-                <h3 class="text-sm font-bold text-slate-700">⏱️ 設定學生申請截止時間</h3>
-                <form action="/teacher/save_settings" method="POST" class="flex gap-2">
-                    <input type="date" name="deadline_date" required class="border px-3 py-2 rounded-xl text-sm">
-                    <input type="time" name="deadline_time" required class="border px-3 py-2 rounded-xl text-sm">
-                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700">儲存時限</button>
-                </form>
-                <p class="text-xs text-red-500 font-medium">目前系統設定截止於：{{ settings.deadline }}</p>
+                <h3 class="text-sm font-bold text-slate-700">📅 請選擇要申請當週的【星期一】</h3>
+                <input type="date" id="week_monday" onchange="updateWeekDates()" class="border px-4 py-2 rounded-xl text-sm bg-slate-50 font-bold text-blue-600 w-full">
             </div>
 
-            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3">
-                <h3 class="text-sm font-bold text-slate-700">📅 請選擇要申請當週的【星期一】</h3>
-                <input type="date" id="week_monday" onchange="updateWeekDates()" class="border px-4 py-2 rounded-xl text-sm bg-slate-50 font-bold text-blue-600">
+            <!-- 🎯 新增：一鍵鎖定/解鎖動態切換區塊 -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3 flex flex-col justify-center">
+                <h3 class="text-sm font-bold text-slate-700">🔒 一鍵管制學生登記權限</h3>
+                <button id="lock-btn" onclick="toggleSystemLock()" class="w-full font-bold py-3 rounded-xl shadow transition text-center text-sm active:scale-95 duration-150">
+                    <!-- 這裡會由 JS 依據後端傳來的 system_locked 狀態動態渲染 -->
+                </button>
             </div>
         </div>
 
@@ -62,16 +60,36 @@
                 </table>
             </div>
         </div>
-
-        <div class="flex justify-end pt-4">
-            <button onclick="triggerAutomation()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg text-lg transition duration-150 active:scale-95">
-                🔒 本週確定無誤，送出自動化填報學校網頁
-            </button>
-        </div>
     </div>
 
     <script>
         const rawApplications = {{ applications | tojson | safe }};
+        let isSystemLocked = {{ 'true' if system_locked else 'false' }};
+
+        // 🎯 依據狀態渲染「一鍵鎖定/解鎖」按鈕樣式
+        function renderLockButton() {
+            const btn = document.getElementById('lock-btn');
+            if (isSystemLocked) {
+                btn.className = "w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow transition text-center text-sm active:scale-95 duration-150";
+                btn.innerHTML = "🔒 系統已鎖定 (學生無法登記，點擊解開)";
+            } else {
+                btn.className = "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow transition text-center text-sm active:scale-95 duration-150";
+                btn.innerHTML = "🔓 系統開放中 (學生可登記，點擊立刻鎖定)";
+            }
+        }
+
+        // 🎯 觸發切換鎖定與解鎖
+        function toggleSystemLock() {
+            fetch('/teacher/toggle_lock', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    isSystemLocked = data.system_locked;
+                    renderLockButton();
+                    alert(isSystemLocked ? "🔒 系統已成功鎖定，學生端現在無法登記囉！" : "🔓 系統已成功解鎖，開放學生登記填報。");
+                }
+            });
+        }
 
         function getRecentMonday() {
             let d = new Date();
@@ -80,7 +98,6 @@
         }
         document.getElementById('week_monday').value = getRecentMonday();
 
-        // 完全保留你原本的所有時間計算法則
         function calculateStatus(app, checkDateStr) {
             if (app.leave_type === "工讀") {
                 if (app.work_date !== checkDateStr) return null;
@@ -113,7 +130,6 @@
             return null;
         }
 
-        // 🎯 修正2：改用安全 Index 抓取資料，100% 避免 JSON 字串雙引號破壞 HTML 結構導致網頁讀不出來
         function showDetailByIndex(index) {
             const app = rawApplications[index];
             const panel = document.getElementById('detail-panel');
@@ -122,10 +138,17 @@
             panel.classList.remove('hidden');
             
             let html = `
-                <div>
-                    <p class="mb-1"><strong>👤 學生基本資料：</strong> <span class="text-blue-700 font-bold">${app.student_name} (${app.student_id})</span></p>
-                    <p class="mb-1"><strong>📌 申請假別：</strong> <span class="bg-indigo-600 text-white px-2 py-0.5 text-xs rounded font-bold">${app.leave_type}</span></p>
-                    <p class="mb-1"><strong>⏱️ 學生手機送出時間：</strong> <span class="text-gray-500">${app.timestamp || '無紀錄'}</span></p>
+                <div class="flex flex-col justify-between h-full space-y-4">
+                    <div>
+                        <p class="mb-1"><strong>👤 學生基本資料：</strong> <span class="text-blue-700 font-bold">${app.student_name} (${app.student_id})</span></p>
+                        <p class="mb-1"><strong>📌 申請假別：</strong> <span class="bg-indigo-600 text-white px-2 py-0.5 text-xs rounded font-bold">${app.leave_type}</span></p>
+                        <p class="mb-1"><strong>⏱️ 學生手機送出時間：</strong> <span class="text-gray-500">${app.timestamp || '無紀錄'}</span></p>
+                    </div>
+                    <div class="pt-2">
+                        <button onclick="deleteApplication('${app.student_id}', '${app.target_date}')" class="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow transition flex items-center gap-1">
+                            🗑️ 刪除此筆請假紀錄
+                        </button>
+                    </div>
                 </div>
                 <div class="bg-white p-3 rounded-xl border border-blue-100 space-y-1">
                     <p class="text-xs font-bold text-indigo-500 uppercase tracking-wider border-b pb-1 mb-1">📋 學生填報之原始詳細欄位</p>
@@ -158,6 +181,23 @@
             html += `</div>`;
             content.innerHTML = html;
             panel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function deleteApplication(studentId, targetDate) {
+            if (!confirm("⚠️ 確定要刪除這筆請假填報紀錄嗎？此動作將無法復原。")) return;
+            
+            let fd = new FormData();
+            fd.append('student_id', studentId);
+            fd.append('target_date', targetDate);
+            
+            fetch('/teacher/delete_application', { method: 'POST', body: fd })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message);
+                if (data.status === 'success') {
+                    window.location.reload();
+                }
+            });
         }
 
         function updateWeekDates() {
@@ -242,13 +282,10 @@
             fetch('/teacher/update_status', { method: 'POST', body: fd });
         }
 
-        function triggerAutomation() {
-            fetch('/teacher/confirm_week', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => { alert(data.message); });
-        }
-
-        window.onload = updateWeekDates;
+        window.onload = function() {
+            updateWeekDates();
+            renderLockButton();
+        };
     </script>
 </body>
 </html>
