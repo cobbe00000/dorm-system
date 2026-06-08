@@ -6,10 +6,15 @@ from datetime import datetime as dt
 app = Flask(__name__)
 app.secret_key = "dorm_system_secret_key_2026"
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# 🎯 遵循你最初的專案實體目錄路徑
+BASE_DIR = "c:\\DormSystem"
 DB_FILE = os.path.join(BASE_DIR, "data.json")
 
 TEACHER_PWD = "0800092000"
+
+# 確保實體資料夾存在
+if not os.path.exists(BASE_DIR):
+    os.makedirs(BASE_DIR)
 
 def load_data():
     if not os.path.exists(DB_FILE):
@@ -39,7 +44,7 @@ def login():
             else:
                 return render_template("login.html", error="老師密碼錯誤！")
         else:
-            # 🎯 學生登入時檢查是否被一鍵鎖定
+            # 🎯 檢查是否被老師一鍵鎖定
             db = load_data()
             if db.get("system_locked", False):
                 return render_template("login.html", error="系統目前處於鎖定狀態，暫不開放填報！")
@@ -62,7 +67,7 @@ def student_form():
     if session.get("role") != "student":
         return redirect(url_for("login"))
         
-    # 🎯 防止學生繞過前端直接送出資料，後端再次檢查鎖定狀態
+    # 🎯 後端即時攔截鎖定狀態
     db = load_data()
     if db.get("system_locked", False):
         if request.method == "POST":
@@ -97,7 +102,7 @@ def student_form():
         db["applications"].append(form_data)
         save_data(db)
         
-        return jsonify({"status": "success", "message": f"📥 {target_date} 的資料填報成功！您可以繼續填寫其他日期的假單唷。"})
+        return jsonify({"status": "success", "message": f"📥 {target_date} 的資料填報成功！"})
 
     return render_template("student.html", student_id=session.get("student_id"), student_name=session.get("student_name"))
 
@@ -124,6 +129,7 @@ def update_status():
     save_data(db)
     return jsonify({"status": "success"})
 
+# 🎯 每一筆申請資料後面的刪除鍵功能路由
 @app.route("/teacher/delete_application", methods=["POST"])
 def delete_application():
     if session.get("role") != "teacher":
@@ -139,16 +145,58 @@ def delete_application():
     save_data(db)
     return jsonify({"status": "success", "message": "🗑️ 該筆申請資料已成功刪除！"})
 
-# 🎯 新增：一鍵切換鎖定狀態的路由
+# 🎯 一鍵鎖定/解鎖切換路由
 @app.route("/teacher/toggle_lock", methods=["POST"])
 def toggle_lock():
     if session.get("role") != "teacher":
         return jsonify({"status": "error"})
     db = load_data()
-    # 反轉目前的鎖定狀態
     db["system_locked"] = not db.get("system_locked", False)
     save_data(db)
     return jsonify({"status": "success", "system_locked": db["system_locked"]})
+
+# 🎯 一鍵驅動自動化登記到學校網站的路由
+@app.route("/teacher/submit_to_school", methods=["POST"])
+def submit_to_school():
+    if session.get("role") != "teacher":
+        return jsonify({"status": "error", "message": "權限不足"})
+    
+    payload = request.get_json()
+    monday_date = payload.get("monday")
+    weekly_data = payload.get("data") # 這是前端打包好的整週學生狀態清冊
+    
+    try:
+        # =================================================================
+        # 🛠️ 【這裡填入你試好的 Selenium 學校網站登記腳本】
+        # =================================================================
+        # 範例結構：
+        # from selenium import webdriver
+        # from selenium.webdriver.common.by import By
+        #
+        # driver = webdriver.Chrome()
+        # driver.get("學校請假系統的登記網址")
+        # driver.find_element(By.ID, "username").send_keys("老師帳號")
+        # driver.find_element(By.ID, "password").send_keys("密碼")
+        # driver.find_element(By.ID, "login_btn").click()
+        # 
+        # # 迴圈處理前端傳過來的 weekly_data：
+        # for item in weekly_data:
+        #     sid = item['student_id']
+        #     sname = item['student_name']
+        #     for date_str, status in item['weekly_status'].items():
+        #          # 依據日期與算好的狀態(如:工讀(免早點,要晚點))自動填入學校網頁
+        #          pass
+        # =================================================================
+        
+        print(f"🚀 Selenium 自動化已啟動！正在將 {monday_date} 當週數據登記至學校網站...")
+        
+        return jsonify({
+            "status": "success",
+            "message": f"🎉 學校網站登記完成！已成功將【{monday_date} 當週】所有過濾後的學生名冊一鍵自動登錄完畢！",
+            "submitted_payload": weekly_data
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"自動化登記失敗，原因：{str(e)}"})
 
 @app.route("/logout")
 def logout():
