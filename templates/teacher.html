@@ -1,15 +1,26 @@
 <div style="font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f9f9f9; border-radius: 8px; border: 1px solid #ddd;">
-    <h3 style="color: #333; margin-top: 0; border-bottom: 2px solid #1890ff; padding-bottom: 8px;">📅 宿舍登記截止時間管理</h3>
+    <h3 style="color: #333; margin-top: 0; border-bottom: 2px solid #1890ff; padding-bottom: 8px;">🔒 宿舍登記系統一鍵控制</h3>
 
-    <div style="background: #fff; padding: 15px; border-radius: 6px; border-left: 5px solid #1890ff; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-        <strong style="font-size: 16px; color: #1890ff;">【全域時間控制】</strong>
-        <p style="margin: 8px 0; color: #666;">目前系統設定的截止時間為：<span style="color: #ff4d4f; font-weight: bold;">{{ settings.deadline }}</span></p>
+    <div style="background: #fff; padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center;">
+        <p style="font-size: 18px; margin-bottom: 15px; color: #444;">
+            目前學生登記狀態：
+            {% if settings.system_status == 'open' %}
+                <span style="background: #52c41a; color: white; padding: 4px 12px; border-radius: 5px; font-weight: bold; font-size: 16px;">🟢 開放登記中</span>
+            {% else %}
+                <span style="background: #ff4d4f; color: white; padding: 4px 12px; border-radius: 5px; font-weight: bold; font-size: 16px;">🔴 系統已鎖定</span>
+            {% endif %}
+        </p>
         
-        <form action="/teacher/save_settings" method="POST" style="display: inline-block; margin-top: 5px;">
-            <label>變更截止日期：</label>
-            <input type="date" name="deadline_date" required style="padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
-            <input type="time" name="deadline_time" required style="padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
-            <button type="submit" style="background: #1890ff; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">儲存新截止時間</button>
+        <form action="/teacher/toggle_status" method="POST">
+            {% if settings.system_status == 'open' %}
+                <button type="submit" onclick="return confirm('確定要立刻鎖定系統，禁止學生登記嗎？')" style="background: #ff4d4f; color: white; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 2px 4px rgba(255,77,79,0.3);">
+                    🔒 一鍵鎖定系統
+                </button>
+            {% else %}
+                <button type="submit" onclick="return confirm('確定要重新開啟系統，允許學生登記嗎？')" style="background: #52c41a; color: white; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 2px 4px rgba(82,196,26,0.3);">
+                    🔓 一鍵開啟登記
+                </button>
+            {% endif %}
         </form>
     </div>
 </div>
