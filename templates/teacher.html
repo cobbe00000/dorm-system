@@ -1,26 +1,165 @@
-<div style="font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background: #f9f9f9; border-radius: 8px; border: 1px solid #ddd;">
-    <h3 style="color: #333; margin-top: 0; border-bottom: 2px solid #1890ff; padding-bottom: 8px;">🔒 宿舍登記系統一鍵控制</h3>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>宿舍管理系統 - 老師後台</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        
+        /* 區塊樣式 */
+        .control-box { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 30px; text-align: center; }
+        .status-badge { padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 16px; color: white; display: inline-block; margin-bottom: 15px; }
+        .btn-toggle { border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; color: white; transition: 0.2s; margin: 5px; }
+        
+        /* 表格樣式 */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #007bff; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        tr:hover { background-color: #f1f1f1; }
+        
+        .status-select { padding: 6px; border-radius: 4px; border: 1px solid #ccc; font-weight: bold; }
+        .status-pending { color: #8c8c8c; background: #f5f5f5; }
+        .status-approved { color: #52c41a; background: #f6ffed; }
+        .status-rejected { color: #ff4d4f; background: #fff1f0; }
+        
+        .header-box { display: flex; justify-content: space-between; align-items: center; }
+        .btn-logout { background: #ff4d4f; color: white; text-decoration: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
 
-    <div style="background: #fff; padding: 20px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); text-align: center;">
-        <p style="font-size: 18px; margin-bottom: 15px; color: #444;">
+<div class="container">
+    <div class="header-box">
+        <h2>👨‍🏫 宿舍假單審查後台</h2>
+        <a href="/logout" class="btn-logout">登出系統</a>
+    </div>
+
+    <div class="control-box">
+        <h3 style="margin-top:0; color:#555;">⚙️ 系統一鍵控制中心</h3>
+        <div>
             目前學生登記狀態：
             {% if settings.system_status == 'open' %}
-                <span style="background: #52c41a; color: white; padding: 4px 12px; border-radius: 5px; font-weight: bold; font-size: 16px;">🟢 開放登記中</span>
+                <span class="status-badge" style="background: #52c41a;">🟢 開放登記中</span>
             {% else %}
-                <span style="background: #ff4d4f; color: white; padding: 4px 12px; border-radius: 5px; font-weight: bold; font-size: 16px;">🔴 系統已鎖定</span>
+                <span class="status-badge" style="background: #ff4d4f;">🔴 系統已鎖定</span>
             {% endif %}
-        </p>
+        </div>
         
-        <form action="/teacher/toggle_status" method="POST">
-            {% if settings.system_status == 'open' %}
-                <button type="submit" onclick="return confirm('確定要立刻鎖定系統，禁止學生登記嗎？')" style="background: #ff4d4f; color: white; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 2px 4px rgba(255,77,79,0.3);">
-                    🔒 一鍵鎖定系統
-                </button>
-            {% else %}
-                <button type="submit" onclick="return confirm('確定要重新開啟系統，允許學生登記嗎？')" style="background: #52c41a; color: white; border: none; padding: 10px 25px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; box-shadow: 0 2px 4px rgba(82,196,26,0.3);">
-                    🔓 一鍵開啟登記
-                </button>
-            {% endif %}
-        </form>
+        <div style="margin-top: 10px;">
+            <form action="/teacher/toggle_status" method="POST" style="display: inline-block;">
+                {% if settings.system_status == 'open' %}
+                    <button type="submit" class="btn-toggle" onclick="return confirm('確定要立刻鎖定系統，禁止學生登記嗎？')" style="background: #ff4d4f; box-shadow: 0 2px 4px rgba(255,77,79,0.3);">
+                        🔒 一鍵鎖定系統
+                    </button>
+                {% else %}
+                    <button type="submit" class="btn-toggle" style="background: #52c41a; box-shadow: 0 2px 4px rgba(82,196,26,0.3);">
+                        🔓 一鍵開啟登記
+                    </button>
+                {% endif %}
+            </form>
+
+            <button class="btn-toggle" onclick="triggerAutoRegister()" style="background: #1890ff; box-shadow: 0 2px 4px rgba(24,144,255,0.3);">
+                🚀 一鍵幫我登記 (自動上傳學校網站)
+            </button>
+        </div>
     </div>
+
+    <h3 style="color: #333; margin-bottom: 5px;">📋 學生假單清單</h3>
+    <p style="color: #666; margin-top: 0;">目前共有 {{ applications|length }} 筆申請資料 (依學號排序)</p>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>學號</th>
+                <th>姓名</th>
+                <th>假別</th>
+                <th>主要日期 (目標日期)</th>
+                <th>詳細填報內容</th>
+                <th>填單時間</th>
+                <th>審核狀態</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for app in applications %}
+            <tr>
+                <td><strong>{{ app.student_id }}</strong></td>
+                <td>{{ app.student_name }}</td>
+                <td>
+                    <span style="padding: 3px 8px; border-radius: 4px; font-weight: bold; 
+                        {% if app.leave_type == '工讀' %} background: #e6f7ff; color: #1890ff;
+                        {% elif app.leave_type == '省親' %} background: #f6ffed; color: #52c41a;
+                        {% else %} background: #fff7e6; color: #fa8c16; {% endif %}">
+                        {{ app.leave_type }}
+                    </span>
+                </td>
+                <td style="color: #d4380d; font-weight: bold;">{{ app.target_date }}</td>
+                <td>
+                    <div style="font-size: 13px; color: #555; max-width: 400px; word-break: break-all;">
+                        {% if app.leave_type == '工讀' %}
+                            📍 地點: {{ app.work_place }} | ⏰ 時間: {{ app.work_time_start }}~{{ app.work_time_end }}
+                        {% elif app.leave_type == '省親' %}
+                            🏠 期間: {{ app.fam_start_date }} ~ {{ app.fam_end_date }}
+                        {% elif app.leave_type == '回國' %}
+                            ✈️ 出國: {{ app.go_date }} | 🛬 返台: {{ app.back_date }}
+                        {% endif %}
+                    </div>
+                </td>
+                <td style="font-size: 12px; color: #999;">{{ app.timestamp }}</td>
+                <td>
+                    <select class="status-select {% if app.teacher_status == '已核准' %}status-approved{% elif app.teacher_status == '不核准' %}status-rejected{% else %}status-pending{% endif %}" 
+                            onchange="updateStatus('{{ app.student_id }}', '{{ app.target_date }}', this)">
+                        <option value="待審核" {% if app.teacher_status == '待審核' %}selected{% endif %}>⏳ 待審核</option>
+                        <option value="已核准" {% if app.teacher_status == '已核准' %}selected{% endif %}>✅ 已核准</option>
+                        <option value="不核准" {% if app.teacher_status == '不核准' %}selected{% endif %}>❌ 不核准</option>
+                    </select>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" style="text-align: center; color: #999; padding: 30px;">目前雲端資料庫內尚無任何學生申請資料。</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
+
+<script>
+function updateStatus(studentId, targetDate, selectElement) {
+    const status = selectElement.value;
+    selectElement.className = "status-select";
+    if (status === '已核准') selectElement.classList.add('status-approved');
+    else if (status === '不核准') selectElement.classList.add('status-rejected');
+    else selectElement.classList.add('status-pending');
+
+    const formData = new FormData();
+    formData.append('student_id', studentId);
+    formData.append('target_date', targetDate);
+    formData.append('status', status);
+
+    fetch('/teacher/update_status', { method: 'POST', body: formData })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status !== 'success') alert('🚨 狀態更新失敗！');
+    });
+}
+
+// 🎯 觸發一鍵自動登記上傳的功能
+function triggerAutoRegister() {
+    if(!confirm('確定要啟動自動化排隊登記，將所有假單同步到學校網站嗎？')) return;
+    
+    fetch('/teacher/confirm_week', { method: 'POST' })
+    .then(response => response.json())
+    .then(data => {
+        alert(data.message);
+    })
+    .catch(err => {
+        alert('🚨 啟動自動化失敗，請檢查連線！');
+    });
+}
+</script>
+
+</body>
+</html>
